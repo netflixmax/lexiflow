@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">LexiFlow</string>
+    <string name="title_activity_main">LexiFlow</string>
+    <string name="package_name">com.lexiflow.app</string>
+    <string name="custom_url_scheme">com.lexiflow.app</string>
+</resources>

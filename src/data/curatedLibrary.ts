@@ -1,0 +1,266 @@
+import type { ContentItem, PodcastFeed } from '../types';
+
+function countWords(paragraphs: string[], chapters?: { paragraphs: string[] }[]): number {
+  const all = chapters
+    ? chapters.flatMap((c) => c.paragraphs)
+    : paragraphs;
+  return all.join(' ').trim().split(/\s+/).filter(Boolean).length;
+}
+
+const rawItems: Omit<ContentItem, 'wordCount'>[] = [
+  {
+    id: 'ai-effective-agents',
+    title: 'Building Effective AI Agents: Simplicity Before Complexity',
+    subtitle: 'Why composable workflows and sharp tool interfaces outperform sprawling agent frameworks.',
+    author: 'LexiFlow AI Briefing',
+    source: 'AI Engineering',
+    category: 'ai',
+    publishedAt: '2026-10-18',
+    tags: ['AI Agents', 'LLM Engineering', 'Productivity'],
+    readProgress: 0,
+    paragraphs: [
+      'Over the past year, engineering teams across the industry have discovered a counterintuitive truth about large language model systems: the most reliable AI products are rarely built on elaborate, opaque multi-agent frameworks. Instead, they rely on simple, composable patterns where the model is given clear boundaries, well-documented tools, and deterministic feedback loops.',
+      'Before reaching for an autonomous agent, it is worth distinguishing between a workflow and an agent. Workflows orchestrate language models and tools through predefined code paths. They excel when a task can be decomposed into predictable steps—such as routing a query, drafting a response, and verifying constraints. Agents, by contrast, dynamically direct their own tool usage and control flow, making them invaluable for open-ended problems like debugging unfamiliar codebases or synthesizing scattered research.',
+      'The decisive bottleneck in modern agentic systems is rarely raw model intelligence; it is the quality of the Agent-Computer Interface. Just as human engineers thrive with ergonomic APIs and unambiguous error messages, language models perform dramatically better when tool parameters are self-explanatory, edge cases are anticipated, and file paths are absolute rather than ambiguous.',
+      'Equally important is designing tight evaluation loops. Without ground-truth verification—such as running unit tests, checking compiler output, or inspecting rendered pixels—an agent can confidently compound small hallucinations across dozens of steps. When every tool call returns concise, actionable signal, the model can self-correct before errors cascade.',
+      'In practice, mastery of AI tools is less about memorizing clever prompt incantations and more about systems thinking: structuring context cleanly, investing in fast feedback, and delegating judgment only where flexibility genuinely creates leverage.',
+    ],
+  },
+  {
+    id: 'ai-context-engineering',
+    title: 'The Craft of Context Engineering',
+    subtitle: 'Treating the LLM context window as a finite, high-leverage working memory.',
+    author: 'LexiFlow AI Briefing',
+    source: 'AI Tools & Craft',
+    category: 'ai',
+    publishedAt: '2026-11-02',
+    tags: ['Context Engineering', 'Prompt Craft', 'Systems'],
+    readProgress: 0,
+    paragraphs: [
+      'As language models grew from four thousand tokens to millions, many practitioners assumed that prompt design would become obsolete—just dump every document into the window and let attention sort it out. Production experience quickly refuted that assumption. Even with vast context limits, signal-to-noise ratio remains paramount.',
+      'Context engineering is the discipline of curating the exact information, instructions, examples, and retrieved evidence a model needs at the moment of inference. Irrelevant logs, contradictory instructions, or stale conversation turns silently degrade reasoning quality and inflate latency.',
+      'Three habits separate strong practitioners from casual users. First, lead with intent and constraints: articulate what a good output looks like and what pitfalls to avoid before pasting raw source material. Second, structure complex inputs with explicit delimiters and headings so the model can distinguish instructions from data.',
+      'Third, treat iteration as a specification problem. Whenever an AI assistant produces a vague or brittle result, resist the impulse to patch the output manually and move on. Instead, ask which missing assumption or ambiguous criterion caused the drift, and refine your reusable prompt template.',
+      'Over months, this habit compounds. Your personal library of crisp specifications, checklists, and tool-assisted workflows becomes an intellectual exoskeleton—amplifying reading comprehension, writing clarity, and technical execution alike.',
+    ],
+  },
+  {
+    id: 'phil-marcus-meditations',
+    title: 'Meditations: On Perception and the Inner Citadel',
+    subtitle: 'Selected passages from Books II and IV on discipline, judgment, and mental clarity.',
+    author: 'Marcus Aurelius',
+    source: 'Stoic Philosophy',
+    category: 'philosophy',
+    publishedAt: 'c. 170 AD',
+    tags: ['Stoicism', 'Self-Mastery', 'Classics'],
+    readProgress: 0,
+    paragraphs: [
+      'Begin the morning by saying to thyself, I shall meet with the busybody, the ungrateful, arrogant, deceitful, envious, unsocial. All these things happen to them by reason of their ignorance of what is good and evil. But I who have seen the nature of the good that it is beautiful, and of the bad that it is ugly, can neither be injured by any of them, nor can I be angry with my kinsman, nor hate him.',
+      'Men seek retreats for themselves, houses in the country, sea-shores, and mountains; and thou too art wont to desire such things very much. But this is altogether a mark of the most common sort of men, for it is in thy power whenever thou shalt choose to retire into thyself. For nowhere either with more quiet or more freedom from trouble does a man retire than into his own soul.',
+      'Constantly then give to thyself this retreat, and renew thyself; and let thy principles be brief and fundamental, which, as soon as thou shalt recur to them, will be sufficient to cleanse the soul completely, and to send thee back free from all discontent with the things to which thou returnest.',
+      'Take away thy opinion, and then there is taken away the complaint, "I have been harmed." Take away the complaint, "I have been harmed," and the harm is taken away. That which does not make a man worse than he was, also does not make his life worse, nor does it harm him either from without or from within.',
+      'The universe is transformation: our life is what our thoughts make it. Look well into thyself; there is a source of strength which will always spring up if thou wilt always look.',
+    ],
+  },
+  {
+    id: 'phil-seneca-shortness',
+    title: 'On the Shortness of Life (De Brevitate Vitae)',
+    subtitle: 'Why we do not have a short time to live, but rather waste much of it.',
+    author: 'Seneca',
+    source: 'Moral Essays',
+    category: 'philosophy',
+    publishedAt: '49 AD',
+    tags: ['Time', 'Stoicism', 'Attention'],
+    readProgress: 0,
+    paragraphs: [
+      'It is not that we have a short space of time, but that we waste much of it. Life is long enough, and it has been given in sufficiently generous measure to allow the accomplishment of the very greatest things if the whole of it is well invested. But when it is squandered in luxury and carelessness, when it is devoted to no good end, forced at last by the ultimate necessity we perceive that it has passed away before we were aware that it was passing.',
+      'People are frugal in guarding their personal property; but as soon as it comes to squandering time they are most wasteful of the one thing in which it is right to be stingy. You will find no one willing to distribute his money; but to how many does each of us divide up his life!',
+      'Of all people they alone are at leisure who take time for philosophy, they alone really live; for they are not content to be good guardians of their own lifetime only. They annex every age to their own; all the years that have gone before them are an addition to their store.',
+      'Unless we are most ungrateful, all those men, glorious fashioners of holy thoughts, were born for us; for us they have prepared a way of life. By other men’s labours we are led to the sight of things most beautiful that have been wrested from darkness and brought into light; from no age are we shut out, we have access to all ages.',
+      'Putting things off is the biggest waste of life: it snatches away each day as it comes, and denies us the present by promising the future. The greatest obstacle to living is expectancy, which hangs upon tomorrow and loses today. The whole future lies in uncertainty: live immediately.',
+    ],
+  },
+  {
+    id: 'phil-russell-value',
+    title: 'The Value of Philosophy',
+    subtitle: 'From The Problems of Philosophy (Chapter XV): how uncertainty enlarges the mind.',
+    author: 'Bertrand Russell',
+    source: 'The Problems of Philosophy',
+    category: 'philosophy',
+    publishedAt: '1912',
+    tags: ['Epistemology', 'Critical Thinking', 'Classics'],
+    readProgress: 0,
+    paragraphs: [
+      'The value of philosophy is, in fact, to be sought largely in its very uncertainty. The man who has no tincture of philosophy goes through life imprisoned in the prejudices derived from common sense, from the habitual beliefs of his age or his nation, and from convictions which have grown up in his mind without the co-operation or consent of his deliberate reason.',
+      'To such a man the world tends to become definite, finite, obvious; common objects rouse no questions, and unfamiliar possibilities are contemptuously rejected. As soon as we begin to philosophize, on the contrary, we find that even the most everyday things lead to problems to which only very incomplete answers can be given.',
+      'Philosophy, though unable to tell us with certainty what is the true answer to the doubts which it raises, is able to suggest many possibilities which enlarge our thoughts and free them from the tyranny of custom. Thus, while diminishing our feeling of certainty as to what things are, it greatly increases our knowledge as to what they may be.',
+      'It removes the somewhat arrogant dogmatism of those who have never travelled into the region of liberating doubt, and it keeps alive our sense of wonder by showing familiar things in an unfamiliar aspect.',
+      'The mind which has become accustomed to the freedom and impartiality of philosophic contemplation will preserve something of the same freedom and impartiality in the world of action and emotion. It will view its purposes and desires as parts of the whole, with the absence of insistence that results from seeing that they are infinitesimal fragments in a world of which all the rest is unaffected by any one man’s deeds.',
+    ],
+  },
+  {
+    id: 'book-walden-classic',
+    title: 'Walden: Where I Lived, and What I Lived For',
+    subtitle: 'Original multi-chapter reading edition from Henry David Thoreau’s timeless classic.',
+    author: 'Henry David Thoreau',
+    source: 'Project Gutenberg Classic',
+    category: 'book',
+    publishedAt: '1854',
+    tags: ['Original Book', 'Literature', 'Solitude'],
+    readProgress: 0,
+    currentChapter: 0,
+    paragraphs: [],
+    chapters: [
+      {
+        title: 'Chapter I — Living Deliberately',
+        paragraphs: [
+          'I went to the woods because I wished to live deliberately, to front only the essential facts of life, and see if I could not learn what it had to teach, and not, when I came to die, discover that I had not lived. I did not wish to live what was not life, living is so dear; nor did I wish to practise resignation, unless it was quite necessary.',
+          'I wanted to live deep and suck out all the marrow of life, to live so sturdily and Spartan-like as to put to rout all that was not life, to cut a broad swath and shave close, to drive life into a corner, and reduce it to its lowest terms, and, if it proved to be mean, why then to get the whole and genuine meanness of it, and publish its meanness to the world.',
+          'Still we live meanly, like ants; though the fable tells us that we were long ago changed into men; our life is frittered away by detail. An honest man has hardly need to count more than his ten fingers, or in extreme cases he may add his ten toes, and lump the rest. Simplicity, simplicity, simplicity!',
+          'I say, let your affairs be as two or three, and not a hundred or a thousand; instead of a million count half a dozen, and keep your accounts on your thumb-nail. Simplify, simplify. Instead of three meals a day, if it be necessary eat but one; instead of a hundred dishes, five; and reduce other things in proportion.',
+        ],
+      },
+      {
+        title: 'Chapter II — Reading & The Classics',
+        paragraphs: [
+          'With a little more deliberation in the choice of their pursuits, all men would perhaps become essentially students and observers, for certainly their nature and destiny are interesting to all alike. In accumulating property for ourselves or our posterity, in founding a family or a state, or acquiring fame even, we are mortal; but in dealing with truth we are immortal, and need fear no change nor accident.',
+          'Books are the treasured wealth of the world and the fit inheritance of generations and nations. Books, the oldest and the best, stand naturally and rightfully on the shelves of every cottage. They have no cause of their own to plead, but while they enlighten and sustain the reader his common sense will not refuse them.',
+          'To read well, that is, to read true books in a true spirit, is a noble exercise, and one that will task the reader more than any exercise which the customs of the day esteem. It requires a training such as the athletes underwent, the steady intention almost of the whole life to this object.',
+          'Books must be read as deliberately and reservedly as they were written. It is not enough even to be able to speak the language of that nation by which they are written, for there is a memorable interval between the spoken and the written language, the language heard and the language read.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'book-bacon-essays',
+    title: 'Essays: Of Studies & Of Truth',
+    subtitle: 'Dense, aphoristic Renaissance prose—ideal for sharpening precision in English.',
+    author: 'Francis Bacon',
+    source: 'Classic Essays',
+    category: 'book',
+    publishedAt: '1625',
+    tags: ['Original Book', 'Rhetoric', 'Learning'],
+    readProgress: 0,
+    currentChapter: 0,
+    paragraphs: [],
+    chapters: [
+      {
+        title: 'Of Studies',
+        paragraphs: [
+          'Studies serve for delight, for ornament, and for ability. Their chief use for delight is in privateness and retiring; for ornament, is in discourse; and for ability, is in the judgment and disposition of business. For expert men can execute, and perhaps judge of particulars, one by one; but the general counsels, and the plots and marshalling of affairs, come best from those that are learned.',
+          'Crafty men contemn studies, simple men admire them, and wise men use them; for they teach not their own use; but that is a wisdom without them, and above them, won by observation. Read not to contradict and confute; nor to believe and take for granted; nor to find talk and discourse; but to weigh and consider.',
+          'Some books are to be tasted, others to be swallowed, and some few to be chewed and digested; that is, some books are to be read only in parts; others to be read, but not curiously; and some few to be read wholly, and with diligence and attention.',
+          'Reading maketh a full man; conference a ready man; and writing an exact man. And therefore, if a man write little, he had need have a great memory; if he confer little, he had need have a present wit; and if he read little, he had need have much cunning, to seem to know that he doth not.',
+        ],
+      },
+      {
+        title: 'Of Truth',
+        paragraphs: [
+          'What is truth? said jesting Pilate, and would not stay for an answer. Certainly there be that delight in giddiness, and count it a bondage to fix a belief; affecting free-will in thinking, as well as in acting. Yet truth, which only doth judge itself, teacheth that the inquiry of truth, which is the love-making or wooing of it, the knowledge of truth, which is the presence of it, and the belief of truth, which is the enjoying of it, is the sovereign good of human nature.',
+          'The first creature of God, in the works of the days, was the light of the sense; the last was the light of reason; and his sabbath work ever since is the illumination of his Spirit. Certainly, it is heaven upon earth, to have a man’s mind move in charity, rest in providence, and turn upon the poles of truth.',
+          'Clear and round dealing is the honour of man’s nature; and mixture of falsehood is like alloy in coin of gold and silver, which may make the metal work the better, but it embaseth it. For these winding and crooked courses are the goings of the serpent; which goeth basely upon the belly, and not upon the feet.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'paper-attention-is-all-you-need',
+    title: 'Attention Is All You Need (arXiv:1706.03762)',
+    subtitle: 'Vaswani et al. (2017) — Core Abstract, Motivation & Architectural Breakthrough.',
+    author: 'Ashish Vaswani, Noam Shazeer, et al.',
+    source: 'arXiv Landmark Paper',
+    category: 'paper',
+    publishedAt: '2017-06-12',
+    externalUrl: 'https://arxiv.org/abs/1706.03762',
+    tags: ['Transformer', 'Deep Learning', 'Paper'],
+    readProgress: 0,
+    paragraphs: [
+      'Abstract: The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. The best performing models also connect the encoder and decoder through an attention mechanism. We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.',
+      'Experiments on two machine translation tasks show these models to be superior in quality while being more parallelizable and requiring significantly less time to train. Our model achieves 28.4 BLEU on the WMT 2014 English-to-German translation task, improving over the existing best results, including ensembles, by over 2 BLEU.',
+      'Introduction: Recurrent models typically factor computation along the symbol positions of the input and output sequences. Aligning the positions to steps in computation time, they generate a sequence of hidden states as a function of the previous hidden state and the input for the current position. This inherently sequential nature precludes parallelization within training examples, which becomes critical at longer sequence lengths, as memory constraints limit batching across examples.',
+      'Attention mechanisms have become an integral part of compelling sequence modeling and transduction models in various tasks, allowing modeling of dependencies without regard to their distance in the input or output sequences. In this work we propose the Transformer, a model architecture eschewing recurrence and instead relying entirely on an attention mechanism to draw global dependencies between input and output.',
+      'Multi-Head Attention allows the model to jointly attend to information from different representation subspaces at different positions. Because self-attention connects all positions with a constant number of sequentially executed operations, it drastically shortens the path length between long-range dependencies, enabling modern large-scale pretraining.',
+    ],
+  },
+  {
+    id: 'paper-cot-prompting',
+    title: 'Chain-of-Thought Prompting Elicits Reasoning in Large Language Models',
+    subtitle: 'Wei et al. (2022) — How intermediate reasoning steps unlock emergent capabilities.',
+    author: 'Jason Wei, Xuezhi Wang, Dale Schuurmans, et al.',
+    source: 'arXiv:2201.11903',
+    category: 'paper',
+    publishedAt: '2022-01-28',
+    externalUrl: 'https://arxiv.org/abs/2201.11903',
+    tags: ['Reasoning', 'Prompting', 'Emergence'],
+    readProgress: 0,
+    paragraphs: [
+      'Abstract: We explore how generating a chain of thought—a series of intermediate reasoning steps—significantly improves the ability of large language models to perform complex reasoning. In particular, we show how such reasoning abilities emerge naturally in sufficiently large language models via a simple method called chain-of-thought prompting, where a few chain-of-thought demonstrations are provided as exemplars in prompting.',
+      'Experiments on three large language models show that chain-of-thought prompting improves performance on a range of arithmetic, commonsense, and symbolic reasoning tasks. The empirical gains can be striking. For instance, prompting a 540B-parameter language model with just eight chain-of-thought exemplars achieves state of the art accuracy on the GSM8K benchmark of math word problems, surpassing even finetuned GPT-3 with a verifier.',
+      'Why does decomposing a problem into verbalized steps help so dramatically? First, chain of thought allows models to decompose multi-step problems into intermediate steps, which means that additional computation can be allocated to problems that require more reasoning steps. Second, it provides an interpretable window into the behavior of the model, suggesting how it might have arrived at a particular answer and providing opportunities to debug where the reasoning path went wrong.',
+      'Notably, chain-of-thought prompting is an emergent property of model scale: it does not positively impact performance for small models, and only yields substantial gains when used with models of sufficient capacity. Furthermore, ablation studies confirm that the performance boost stems from structured intermediate reasoning rather than merely generating extra tokens.',
+    ],
+  },
+];
+
+export const CURATED_LIBRARY: ContentItem[] = rawItems.map((item) => ({
+  ...item,
+  wordCount: countWords(item.paragraphs, item.chapters),
+}));
+
+export const CURATED_RSS_FEEDS = [
+  {
+    id: 'rss-simon-willison',
+    name: 'Simon Willison (AI & Tools)',
+    category: 'ai' as const,
+    url: 'https://simonwillison.net/atom/everything/',
+  },
+  {
+    id: 'rss-hf-blog',
+    name: 'Hugging Face Blog',
+    category: 'ai' as const,
+    url: 'https://huggingface.co/blog/feed.xml',
+  },
+  {
+    id: 'rss-aeon',
+    name: 'Aeon Essays (Philosophy)',
+    category: 'philosophy' as const,
+    url: 'https://aeon.co/feed.rss',
+  },
+  {
+    id: 'rss-fs',
+    name: 'Farnam Street (Mental Models)',
+    category: 'philosophy' as const,
+    url: 'https://fs.blog/feed/',
+  },
+];
+
+export const CURATED_PODCASTS: PodcastFeed[] = [
+  {
+    id: 'pod-latent-space',
+    title: 'Latent Space: AI Engineer',
+    category: 'ai',
+    description: 'Deep technical conversations with AI engineers, researchers, and tool builders.',
+    rssUrl: 'https://api.substack.com/feed/podcast/1084089.rss',
+  },
+  {
+    id: 'pod-philosophize-this',
+    title: 'Philosophize This!',
+    category: 'philosophy',
+    description: 'Accessible, lucid explorations of history’s greatest thinkers and ideas.',
+    rssUrl: 'https://philosophizethis.libsyn.com/rss',
+  },
+  {
+    id: 'pod-6min-english',
+    title: 'BBC 6 Minute English',
+    category: 'english',
+    description: 'Concise 6-minute discussions packed with clear British pronunciation and vocabulary.',
+    rssUrl: 'https://podcasts.files.bbci.co.uk/p02pc9tn.rss',
+  },
+  {
+    id: 'pod-ted-daily',
+    title: 'TED Talks Daily',
+    category: 'philosophy',
+    description: 'Thought-provoking talks on technology, science, philosophy, and human creativity.',
+    rssUrl: 'https://feeds.feedburner.com/TEDTalks_audio',
+  },
+];

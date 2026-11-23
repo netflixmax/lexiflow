@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+android/local.properties
+android/.gradle/
+android/build/
+android/app/build/
+android/app/lexiflow-release.keystore
+release/
