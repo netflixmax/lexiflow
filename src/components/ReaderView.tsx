@@ -16,6 +16,7 @@ import {
 import { analyzeSentenceSyntax, distillArticleInsight, explainWordInContext } from '../services/aiTutor';
 import { lookupWord } from '../services/dictionary';
 import { speakText } from '../services/nativeBridge';
+import { translateEnToZh } from '../services/translator';
 import type {
   AiConfig,
   ContentItem,
@@ -114,11 +115,35 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const [articleInsight, setArticleInsight] = useState<string | null>(null);
   const [markedDone, setMarkedDone] = useState(false);
 
+  // Free bilingual paragraph translations (cached locally)
+  const [paraZh, setParaZh] = useState<Record<number, string>>({});
+  const [translatingAll, setTranslatingAll] = useState(false);
+
   const aiReady = aiConfig.enabled && Boolean(aiConfig.apiKey.trim());
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 });
+    setParaZh({});
   }, [chapterIdx, item.id]);
+
+  useEffect(() => {
+    if (!readerSettings.showBilingual) return;
+    let cancelled = false;
+    setTranslatingAll(true);
+    (async () => {
+      for (let i = 0; i < activeParagraphs.length; i++) {
+        if (cancelled) break;
+        const zh = await translateEnToZh(activeParagraphs[i]);
+        if (!cancelled && zh) {
+          setParaZh((prev) => ({ ...prev, [i]: zh }));
+        }
+      }
+      if (!cancelled) setTranslatingAll(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [readerSettings.showBilingual, activeParagraphs]);
 
   const handleTapWord = async (rawToken: string, paragraph: string) => {
     const cleaned = rawToken.replace(/^[^a-zA-Z]+|[^a-zA-Z]+$/g, '');
@@ -146,11 +171,21 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     if (audioUrl) {
       const audio = new Audio(audioUrl);
       audio.play().catch(() => {
-        speakText(text, { rate: 0.9, locale: readerSettings.ttsAccent });
+        speakText(text, {
+          rate: 0.9,
+          locale: readerSettings.ttsAccent,
+          voiceMode: readerSettings.ttsVoiceMode,
+          voiceName: readerSettings.ttsVoiceName,
+        });
       });
       return;
     }
-    speakText(text, { rate: 0.9, locale: readerSettings.ttsAccent });
+    speakText(text, {
+      rate: 0.9,
+      locale: readerSettings.ttsAccent,
+      voiceMode: readerSettings.ttsVoiceMode,
+      voiceName: readerSettings.ttsVoiceName,
+    });
   };
 
   const handleSaveWord = () => {
@@ -255,6 +290,25 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         </button>
 
         <div className="flex items-center gap-1.5">
+          <button
+            onClick={() =>
+              onUpdateSettings({
+                ...readerSettings,
+                showBilingual: !readerSettings.showBilingual,
+              })
+            }
+            className={`h-8 px-2.5 rounded-full border text-[12px] font-medium flex items-center gap-1 transition-colors ${
+              readerSettings.showBilingual
+                ? 'bg-amber-600/15 border-amber-500/40 text-amber-800 dark:text-amber-300'
+                : `${theme.border}`
+            }`}
+          >
+            {translatingAll && readerSettings.showBilingual ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : null}
+            双语
+          </button>
+
           <button
             onClick={() => onSendToListen(item)}
             className={`h-8 px-3 rounded-full border ${theme.border} text-[12px] font-medium flex items-center gap-1.5`}
@@ -382,31 +436,40 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           {activeParagraphs.map((para, pIdx) => {
             const tokens = para.split(/([A-Za-z][A-Za-z'-]*)/g);
             return (
-              <p key={pIdx} className="tracking-[0.005em]">
-                {tokens.map((tok, tIdx) => {
-                  if (!/^[A-Za-z]/.test(tok)) {
-                    return <React.Fragment key={tIdx}>{tok}</React.Fragment>;
-                  }
-                  const lower = tok.toLowerCase();
-                  const isSaved = readerSettings.highlightSavedWords && savedWordSet.has(lower);
-                  const isSelected = selectedWord?.toLowerCase() === lower;
-                  return (
-                    <span
-                      key={tIdx}
-                      onClick={() => handleTapWord(tok, para)}
-                      className={`cursor-pointer rounded-xs transition-colors ${
-                        isSelected
-                          ? 'bg-amber-300/70 text-[#1C1B18]'
-                          : isSaved
-                            ? 'border-b-[1.5px] border-amber-500/70'
-                            : 'active:bg-amber-200/50'
-                      }`}
-                    >
-                      {tok}
-                    </span>
-                  );
-                })}
-              </p>
+              <div key={pIdx} className="space-y-1.5">
+                <p className="tracking-[0.005em]">
+                  {tokens.map((tok, tIdx) => {
+                    if (!/^[A-Za-z]/.test(tok)) {
+                      return <React.Fragment key={tIdx}>{tok}</React.Fragment>;
+                    }
+                    const lower = tok.toLowerCase();
+                    const isSaved = readerSettings.highlightSavedWords && savedWordSet.has(lower);
+                    const isSelected = selectedWord?.toLowerCase() === lower;
+                    return (
+                      <span
+                        key={tIdx}
+                        onClick={() => handleTapWord(tok, para)}
+                        className={`cursor-pointer rounded-xs transition-colors ${
+                          isSelected
+                            ? 'bg-amber-300/70 text-[#1C1B18]'
+                            : isSaved
+                              ? 'border-b-[1.5px] border-amber-500/70'
+                              : 'active:bg-amber-200/50'
+                        }`}
+                      >
+                        {tok}
+                      </span>
+                    );
+                  })}
+                </p>
+                {readerSettings.showBilingual && paraZh[pIdx] && (
+                  <p
+                    className={`font-sans text-[14px] leading-relaxed ${theme.muted} pl-2.5 border-l-2 border-amber-500/35`}
+                  >
+                    {paraZh[pIdx]}
+                  </p>
+                )}
+              </div>
             );
           })}
         </div>

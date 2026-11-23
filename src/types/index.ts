@@ -117,8 +117,11 @@ export interface ReaderSettings {
   fontSize: number; // px, 15..24
   lineHeight: number; // 1.5..2.1
   highlightSavedWords: boolean;
+  showBilingual: boolean;
   ttsRate: number; // 0.6..1.6
   ttsAccent: 'en-US' | 'en-GB';
+  ttsVoiceMode: 'neural_online' | 'device_best';
+  ttsVoiceName?: string;
 }
 
 export type ActiveTab = 'read' | 'listen' | 'vocab' | 'profile';

@@ -24,8 +24,11 @@ export const DEFAULT_READER_SETTINGS: ReaderSettings = {
   fontSize: 18,
   lineHeight: 1.75,
   highlightSavedWords: true,
-  ttsRate: 0.95,
+  showBilingual: true,
+  ttsRate: 0.9,
   ttsAccent: 'en-US',
+  ttsVoiceMode: 'neural_online',
+  ttsVoiceName: '',
 };
 
 export const DEFAULT_AI_CONFIG: AiConfig = {

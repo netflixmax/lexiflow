@@ -1,4 +1,5 @@
 import { OFFLINE_DICTIONARY_MAP } from '../data/starterDecks';
+import { translateEnToZh } from './translator';
 import type { DictionaryEntry } from '../types';
 
 const cache = new Map<string, DictionaryEntry>();
@@ -98,11 +99,13 @@ export async function lookupWord(rawWord: string): Promise<DictionaryEntry> {
       }
 
       if (definitions.length > 0) {
+        const zhHint = await translateEnToZh(first.word || cand);
         const entry: DictionaryEntry = {
           word: first.word || cand,
           phonetic,
           audioUrl,
           partOfSpeech,
+          zhHint: zhHint || undefined,
           definitions,
           source: 'dictionaryapi',
         };

@@ -9,6 +9,40 @@ function countWords(paragraphs: string[], chapters?: { paragraphs: string[] }[])
 
 const rawItems: Omit<ContentItem, 'wordCount'>[] = [
   {
+    id: 'ai-starter-daily-leverage',
+    title: 'How to Think Clearly With AI Tools Every Day',
+    subtitle: '入门推荐 (B1) · 句子短小清晰，从零压力开始用英文读 AI 生产力思考。',
+    author: 'LexiFlow Starter',
+    source: 'AI 入门精读',
+    category: 'ai',
+    publishedAt: '2026-11-20',
+    tags: ['入门友好', 'AI Tools', 'B1'],
+    readProgress: 0,
+    paragraphs: [
+      'Many people treat AI like a magic search box. They type one short question and hope for a perfect answer. When the answer feels generic, they think the tool is weak. In truth, AI works much better when you treat it like a smart partner.',
+      'A good partner needs clear context. Before you ask AI to write or solve a problem, tell it your real goal, your audience, and what a good result looks like. Two extra sentences of context often double the quality of the reply.',
+      'AI is also a powerful mirror for your own thinking. When you try to explain a messy idea to an AI assistant, you quickly see which parts of your own thought are still unclear. Asking better questions makes you a sharper thinker.',
+      'Start small and build one real habit. Use AI to summarize a paper, check your English email, or explain a hard concept in plain words. Over a year, small daily wins turn into a huge advantage.',
+    ],
+  },
+  {
+    id: 'phil-starter-stoic-calm',
+    title: 'The Simple Art of Staying Calm in a Noisy World',
+    subtitle: '入门推荐 (B1) · 用最平实易懂的现代英文读懂斯多葛哲学的核心智慧。',
+    author: 'LexiFlow Starter',
+    source: '哲思入门精读',
+    category: 'philosophy',
+    publishedAt: '2026-11-21',
+    tags: ['入门友好', 'Stoicism', 'B1'],
+    readProgress: 0,
+    paragraphs: [
+      'Every day, hundreds of things fight for our attention. Messages pop up, news feels urgent, and other people move in a rush. It is easy to feel tired before the day even begins.',
+      'Two thousand years ago, Stoic thinkers offered a simple rule: divide life into two boxes. The first box holds what you can control—your choices, your effort, and your attitude. The second box holds everything else, like the weather, the past, and what others say.',
+      'Most stress comes from trying to fix the second box. When you stop fighting things you cannot change, your energy returns to you. You become calmer, slower to anger, and much more effective.',
+      'Wisdom is not about knowing big words. It is about pausing for three seconds before you react, and asking one quiet question: what is the best next step I can take right now?',
+    ],
+  },
+  {
     id: 'ai-effective-agents',
     title: 'Building Effective AI Agents: Simplicity Before Complexity',
     subtitle: 'Why composable workflows and sharp tool interfaces outperform sprawling agent frameworks.',

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { fetchPodcastEpisodes } from '../services/feeds';
 import { speakText, stopSpeaking } from '../services/nativeBridge';
+import { translateEnToZh } from '../services/translator';
 import type { ContentItem, PodcastEpisode, PodcastFeed, ReaderSettings } from '../types';
 
 interface ListenViewProps {
@@ -78,7 +79,8 @@ export const ListenView: React.FC<ListenViewProps> = ({
   const [sentenceIdx, setSentenceIdx] = useState(0);
   const [isPlayingTts, setIsPlayingTts] = useState(false);
   const [loopSentence, setLoopSentence] = useState(false);
-  const [blindMode, setBlindMode] = useState(false);
+  const [listenStage, setListenStage] = useState<'bilingual' | 'english' | 'blind'>('bilingual');
+  const [sentenceZh, setSentenceZh] = useState<Record<number, string>>({});
   const [revealedIdx, setRevealedIdx] = useState<Set<number>>(new Set());
   const [dictationInput, setDictationInput] = useState('');
 
@@ -88,6 +90,8 @@ export const ListenView: React.FC<ListenViewProps> = ({
   const sentencesRef = useRef<string[]>([]);
   const rateRef = useRef(readerSettings.ttsRate);
   const accentRef = useRef(readerSettings.ttsAccent);
+  const voiceModeRef = useRef(readerSettings.ttsVoiceMode);
+  const voiceNameRef = useRef(readerSettings.ttsVoiceName);
   const sessionStartRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -98,12 +102,38 @@ export const ListenView: React.FC<ListenViewProps> = ({
     setSentenceIdx(0);
     idxRef.current = 0;
     setRevealedIdx(new Set());
+    setSentenceZh({});
     stopTtsPlayback();
   }, [sentences]);
   useEffect(() => {
     rateRef.current = readerSettings.ttsRate;
     accentRef.current = readerSettings.ttsAccent;
-  }, [readerSettings.ttsRate, readerSettings.ttsAccent]);
+    voiceModeRef.current = readerSettings.ttsVoiceMode;
+    voiceNameRef.current = readerSettings.ttsVoiceName;
+  }, [
+    readerSettings.ttsRate,
+    readerSettings.ttsAccent,
+    readerSettings.ttsVoiceMode,
+    readerSettings.ttsVoiceName,
+  ]);
+
+  // Preload Chinese subtitles smoothly in Bilingual Flow stage
+  useEffect(() => {
+    if (listenStage !== 'bilingual' || sentences.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      for (let i = 0; i < sentences.length; i++) {
+        if (cancelled) break;
+        const zh = await translateEnToZh(sentences[i]);
+        if (!cancelled && zh) {
+          setSentenceZh((prev) => ({ ...prev, [i]: zh }));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [listenStage, sentences]);
 
   const commitListeningTime = () => {
     if (sessionStartRef.current) {
@@ -139,6 +169,8 @@ export const ListenView: React.FC<ListenViewProps> = ({
     speakText(list[index], {
       rate: rateRef.current,
       locale: accentRef.current,
+      voiceMode: voiceModeRef.current,
+      voiceName: voiceNameRef.current,
       onEnd: () => {
         if (!playingRef.current) return;
         if (loopRef.current) {
@@ -302,9 +334,32 @@ export const ListenView: React.FC<ListenViewProps> = ({
               ))}
             </select>
 
+            {/* 3-Step Natural Listening Stages */}
+            <div className="grid grid-cols-3 gap-1.5 p-1 bg-[#F1EFEA] rounded-xl">
+              {(
+                [
+                  { k: 'bilingual', label: '① 双语磨耳' },
+                  { k: 'english', label: '② 英文跟读' },
+                  { k: 'blind', label: '③ 盲听挑战' },
+                ] as const
+              ).map((st) => (
+                <button
+                  key={st.k}
+                  onClick={() => setListenStage(st.k)}
+                  className={`py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
+                    listenStage === st.k
+                      ? 'bg-white text-[#1C1B18] shadow-xs'
+                      : 'text-[#6E6B64]'
+                  }`}
+                >
+                  {st.label}
+                </button>
+              ))}
+            </div>
+
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-1.5">
-                {[0.75, 0.95, 1.15, 1.35].map((r) => (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {[0.75, 0.9, 1.05, 1.25].map((r) => (
                   <button
                     key={r}
                     onClick={() => onUpdateSettings({ ...readerSettings, ttsRate: r })}
@@ -326,38 +381,43 @@ export const ListenView: React.FC<ListenViewProps> = ({
                   }
                   className="px-2 py-1 rounded-md text-[11px] font-medium bg-[#F1EFEA] text-[#57544D]"
                 >
-                  {readerSettings.ttsAccent === 'en-US' ? '美音 US' : '英音 UK'}
+                  {readerSettings.ttsAccent === 'en-US' ? '美音' : '英音'}
+                </button>
+                <button
+                  onClick={() =>
+                    onUpdateSettings({
+                      ...readerSettings,
+                      ttsVoiceMode:
+                        readerSettings.ttsVoiceMode === 'neural_online'
+                          ? 'device_best'
+                          : 'neural_online',
+                    })
+                  }
+                  className={`px-2 py-1 rounded-md text-[11px] font-medium ${
+                    readerSettings.ttsVoiceMode === 'neural_online'
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      : 'bg-[#F1EFEA] text-[#57544D]'
+                  }`}
+                >
+                  {readerSettings.ttsVoiceMode === 'neural_online' ? '自然音色' : '本机离线'}
                 </button>
               </div>
 
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setLoopSentence((v) => !v)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium flex items-center gap-1 border ${
-                    loopSentence
-                      ? 'bg-amber-100 border-amber-400 text-amber-900'
-                      : 'bg-white border-[#E5E2DA] text-[#57544D]'
-                  }`}
-                >
-                  <Repeat className="w-3 h-3" /> 单句循环
-                </button>
-                <button
-                  onClick={() => setBlindMode((v) => !v)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium flex items-center gap-1 border ${
-                    blindMode
-                      ? 'bg-[#1C1B18] border-[#1C1B18] text-white'
-                      : 'bg-white border-[#E5E2DA] text-[#57544D]'
-                  }`}
-                >
-                  {blindMode ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                  盲听
-                </button>
-              </div>
+              <button
+                onClick={() => setLoopSentence((v) => !v)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium flex items-center gap-1 border ${
+                  loopSentence
+                    ? 'bg-amber-100 border-amber-400 text-amber-900'
+                    : 'bg-white border-[#E5E2DA] text-[#57544D]'
+                }`}
+              >
+                <Repeat className="w-3 h-3" /> 单句循环
+              </button>
             </div>
           </div>
 
           {/* Blind Dictation Box */}
-          {blindMode && (
+          {listenStage === 'blind' && (
             <div className="px-5 py-3 bg-[#F6F3EB] border-b border-[#E7E2D4]">
               <div className="flex items-center justify-between text-[12px] text-[#6E6B64] mb-1.5">
                 <span>听写当前第 {sentenceIdx + 1} 句（点击句子可揭晓原文）</span>
@@ -379,7 +439,7 @@ export const ListenView: React.FC<ListenViewProps> = ({
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2.5 pb-40">
             {sentences.map((s, idx) => {
               const active = idx === sentenceIdx;
-              const isBlurred = blindMode && !revealedIdx.has(idx);
+              const isBlurred = listenStage === 'blind' && !revealedIdx.has(idx);
               return (
                 <div
                   key={idx}
@@ -412,6 +472,11 @@ export const ListenView: React.FC<ListenViewProps> = ({
                   >
                     {s}
                   </p>
+                  {listenStage === 'bilingual' && sentenceZh[idx] && (
+                    <p className="text-[13px] text-[#78756E] mt-1.5 leading-relaxed">
+                      {sentenceZh[idx]}
+                    </p>
+                  )}
                 </div>
               );
             })}
