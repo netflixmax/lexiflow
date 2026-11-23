@@ -37,7 +37,7 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
 };
 
 export const DEFAULT_UPDATE_CONFIG: UpdateConfig = {
-  githubRepo: '',
+  githubRepo: 'netflixmax/lexiflow',
   manifestUrl: '',
 };
 
