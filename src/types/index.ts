@@ -112,16 +112,26 @@ export interface UserStats {
 
 export type ReaderTheme = 'light' | 'sepia' | 'dark';
 
+export type VoiceEngineType = 'kokoro' | 'rime' | 'system';
+
+export interface VoiceConfig {
+  engine: VoiceEngineType;
+  kokoroSpeaker: number; // 0..10
+  rimeApiKey: string;
+  rimeModel: 'coda' | 'mistv3';
+  rimeSpeaker: string;
+}
+
 export interface ReaderSettings {
   theme: ReaderTheme;
   fontSize: number; // px, 15..24
   lineHeight: number; // 1.5..2.1
   highlightSavedWords: boolean;
+  showSenseGroups: boolean;
   showBilingual: boolean;
   ttsRate: number; // 0.6..1.6
   ttsAccent: 'en-US' | 'en-GB';
-  ttsVoiceMode: 'neural_online' | 'device_best';
-  ttsVoiceName?: string;
+  voice: VoiceConfig;
 }
 
 export type ActiveTab = 'read' | 'listen' | 'vocab' | 'profile';

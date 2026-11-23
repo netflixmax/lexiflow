@@ -9,23 +9,30 @@ import {
   ShieldCheck,
   Sparkles,
   Upload,
+  Volume2,
 } from 'lucide-react';
 import { AI_PROVIDER_PRESETS, testAiConnection } from '../services/aiTutor';
 import {
   APP_VERSION_CODE,
   APP_VERSION_NAME,
+  clearSpeechCache,
   downloadAndInstallApk,
+  fetchRimeVoices,
   getCurrentAppVersion,
+  getSpeechStatus,
+  KOKORO_SPEAKERS,
 } from '../services/nativeBridge';
 import { exportAllDataJson, importAllDataJson } from '../services/storage';
 import { checkForAppUpdate } from '../services/updater';
-import type { AiConfig, AiProvider, UpdateConfig, UpdateInfo, UserStats } from '../types';
+import type { AiConfig, AiProvider, ReaderSettings, UpdateConfig, UpdateInfo, UserStats } from '../types';
 
 interface ProfileViewProps {
   stats: UserStats;
   vocabCount: number;
   aiConfig: AiConfig;
   updateConfig: UpdateConfig;
+  readerSettings: ReaderSettings;
+  onUpdateReaderSettings: (next: ReaderSettings) => void;
   onUpdateAiConfig: (next: AiConfig) => void;
   onUpdateUpdateConfig: (next: UpdateConfig) => void;
   onDataImported: () => void;
@@ -36,11 +43,29 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   vocabCount,
   aiConfig,
   updateConfig,
+  readerSettings,
+  onUpdateReaderSettings,
   onUpdateAiConfig,
   onUpdateUpdateConfig,
   onDataImported,
 }) => {
   const [appVer, setAppVer] = useState({ versionName: APP_VERSION_NAME, versionCode: APP_VERSION_CODE });
+
+  // Voice engine panel state
+  const [showVoicePanel, setShowVoicePanel] = useState(false);
+  const [speechStatus, setSpeechStatus] = useState<{ kokoroBundled: boolean; cacheBytes: number }>({
+    kokoroBundled: true,
+    cacheBytes: 0,
+  });
+  const [rimeVoices, setRimeVoices] = useState<string[]>([
+    'astra',
+    'celeste',
+    'mesa',
+    'marsh',
+    'cove',
+    'orion',
+  ]);
+  const [loadingVoices, setLoadingVoices] = useState(false);
 
   // Updater state
   const [showUpdateSettings, setShowUpdateSettings] = useState(false);
@@ -59,6 +84,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
   useEffect(() => {
     getCurrentAppVersion().then(setAppVer);
+    getSpeechStatus().then(setSpeechStatus);
   }, []);
 
   // Build 28-day activity heatmap
@@ -309,6 +335,179 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   className="w-full h-9 px-3 rounded-lg bg-[#FAF9F6] border border-[#E5E2DA] text-[13px]"
                 />
               </div>
+            </div>
+          )}
+        </section>
+
+        {/* Voice Engine Card (Kokoro Offline + Rime Cloud) */}
+        <section className="bg-white rounded-2xl p-4 border border-[#ECEAE4]">
+          <button
+            onClick={() => {
+              setShowVoicePanel((v) => !v);
+              getSpeechStatus().then(setSpeechStatus);
+            }}
+            className="w-full flex items-center justify-between text-left"
+          >
+            <div>
+              <div className="text-[14px] font-semibold text-[#1C1B18] flex items-center gap-1.5">
+                <Volume2 className="w-4 h-4 text-emerald-700" /> 语音引擎（Kokoro 离线 / Rime 云端）
+              </div>
+              <p className="text-[12px] text-[#8E8A80] mt-0.5">
+                当前：{readerSettings.voice.engine === 'rime' && readerSettings.voice.rimeApiKey
+                  ? `Rime 云端 · ${readerSettings.voice.rimeModel} / ${readerSettings.voice.rimeSpeaker}`
+                  : `Kokoro 离线神经网络 · ${KOKORO_SPEAKERS.find((s) => s.id === readerSettings.voice.kokoroSpeaker)?.name ?? 'Heart'}`}
+              </p>
+            </div>
+            {showVoicePanel ? (
+              <ChevronUp className="w-4 h-4 text-[#78756E]" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-[#78756E]" />
+            )}
+          </button>
+
+          {showVoicePanel && (
+            <div className="mt-4 pt-3.5 border-t border-[#F1EFEA] space-y-3">
+              <div className="grid grid-cols-2 gap-2 p-1 bg-[#F3F1EB] rounded-xl">
+                <button
+                  onClick={() =>
+                    onUpdateReaderSettings({
+                      ...readerSettings,
+                      voice: { ...readerSettings.voice, engine: 'kokoro' },
+                    })
+                  }
+                  className={`py-2 rounded-lg text-[12px] font-medium ${
+                    readerSettings.voice.engine === 'kokoro'
+                      ? 'bg-white text-[#1C1B18] shadow-xs'
+                      : 'text-[#6E6B64]'
+                  }`}
+                >
+                  Kokoro 离线（免费）
+                </button>
+                <button
+                  onClick={() =>
+                    onUpdateReaderSettings({
+                      ...readerSettings,
+                      voice: { ...readerSettings.voice, engine: 'rime' },
+                    })
+                  }
+                  className={`py-2 rounded-lg text-[12px] font-medium ${
+                    readerSettings.voice.engine === 'rime'
+                      ? 'bg-white text-[#1C1B18] shadow-xs'
+                      : 'text-[#6E6B64]'
+                  }`}
+                >
+                  Rime 云端 API
+                </button>
+              </div>
+
+              {readerSettings.voice.engine === 'kokoro' ? (
+                <div className="space-y-2">
+                  <div className="text-[11px] text-[#78756E]">
+                    状态：{speechStatus.kokoroBundled ? '内置 Kokoro-82M 模型已就绪（完全离线免 Key）' : '预览模式（Android 正式包内置 Kokoro）'}
+                  </div>
+                  <select
+                    value={readerSettings.voice.kokoroSpeaker}
+                    onChange={(e) =>
+                      onUpdateReaderSettings({
+                        ...readerSettings,
+                        voice: { ...readerSettings.voice, kokoroSpeaker: Number(e.target.value) },
+                      })
+                    }
+                    className="w-full h-9 px-3 rounded-lg bg-[#FAF9F6] border border-[#E5E2DA] text-[13px]"
+                  >
+                    {KOKORO_SPEAKERS.map((sp) => (
+                      <option key={sp.id} value={sp.id}>
+                        {sp.name} — {sp.desc}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="text-[11px] text-[#78756E] block mb-1">
+                      Rime API Key（SHA-256 本地缓存音频，断网自动回退 Kokoro）
+                    </label>
+                    <input
+                      type="password"
+                      value={readerSettings.voice.rimeApiKey}
+                      onChange={(e) =>
+                        onUpdateReaderSettings({
+                          ...readerSettings,
+                          voice: { ...readerSettings.voice, rimeApiKey: e.target.value },
+                        })
+                      }
+                      placeholder="粘贴你的 Rime API Key…"
+                      className="w-full h-9 px-3 rounded-lg bg-[#FAF9F6] border border-[#E5E2DA] text-[13px]"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {(['coda', 'mistv3'] as const).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => {
+                          onUpdateReaderSettings({
+                            ...readerSettings,
+                            voice: { ...readerSettings.voice, rimeModel: m },
+                          });
+                          setLoadingVoices(true);
+                          fetchRimeVoices(m)
+                            .then(setRimeVoices)
+                            .finally(() => setLoadingVoices(false));
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-[12px] border ${
+                          readerSettings.voice.rimeModel === m
+                            ? 'bg-[#1C1B18] text-white border-[#1C1B18]'
+                            : 'bg-[#FAF9F6] text-[#57544D] border-[#E5E2DA]'
+                        }`}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => {
+                        setLoadingVoices(true);
+                        fetchRimeVoices(readerSettings.voice.rimeModel)
+                          .then(setRimeVoices)
+                          .finally(() => setLoadingVoices(false));
+                      }}
+                      className="ml-auto text-[11px] text-[#57544D] underline"
+                    >
+                      {loadingVoices ? '拉取中…' : '刷新音色'}
+                    </button>
+                  </div>
+                  <select
+                    value={readerSettings.voice.rimeSpeaker}
+                    onChange={(e) =>
+                      onUpdateReaderSettings({
+                        ...readerSettings,
+                        voice: { ...readerSettings.voice, rimeSpeaker: e.target.value },
+                      })
+                    }
+                    className="w-full h-9 px-3 rounded-lg bg-[#FAF9F6] border border-[#E5E2DA] text-[13px]"
+                  >
+                    {rimeVoices.map((v) => (
+                      <option key={v} value={v}>
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex items-center justify-between text-[11px] text-[#8E8A80] pt-1">
+                    <span>
+                      本地音频缓存：{(speechStatus.cacheBytes / (1024 * 1024)).toFixed(2)} MB
+                    </span>
+                    <button
+                      onClick={async () => {
+                        await clearSpeechCache();
+                        setSpeechStatus((s) => ({ ...s, cacheBytes: 0 }));
+                      }}
+                      className="text-rose-600 underline"
+                    >
+                      清空缓存
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </section>

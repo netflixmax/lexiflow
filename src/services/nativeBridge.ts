@@ -1,29 +1,46 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import type { PluginListenerHandle } from '@capacitor/core';
+import type { VoiceConfig } from '../types';
 
-export const APP_VERSION_NAME = '1.1.0';
-export const APP_VERSION_CODE = 10100;
+export const APP_VERSION_NAME = '1.2.0';
+export const APP_VERSION_CODE = 10200;
 
-export interface DeviceVoice {
-  name: string;
-  locale: string;
-  quality: number;
-  isNetwork: boolean;
-}
+export const KOKORO_SPEAKERS: Array<{ id: number; name: string; desc: string }> = [
+  { id: 3, name: 'Heart', desc: '美式温暖女声 · 推荐' },
+  { id: 2, name: 'Bella', desc: '美式自然女声' },
+  { id: 0, name: 'Alloy', desc: '美式清晰中性' },
+  { id: 1, name: 'Aoede', desc: '美式柔和叙事' },
+  { id: 4, name: 'Jessica', desc: '美式知性女声' },
+  { id: 5, name: 'Kore', desc: '美式明亮清晰' },
+  { id: 6, name: 'Nicole', desc: '美式轻柔耳语' },
+  { id: 7, name: 'Nova', desc: '美式清澈播客' },
+  { id: 8, name: 'River', desc: '美式沉稳中性' },
+  { id: 9, name: 'Sarah', desc: '美式新闻质感' },
+  { id: 10, name: 'Sky', desc: '美式轻快活力' },
+];
 
 interface NativeTtsPluginInterface {
-  getVoices(): Promise<{ voices: DeviceVoice[] }>;
-  speak(options: {
-    text: string;
-    rate?: number;
-    locale?: string;
-    voiceName?: string;
-    utteranceId?: string;
-  }): Promise<{ utteranceId: string }>;
+  configure(options: {
+    engine: string;
+    kokoroSpeaker: number;
+    rimeApiKey: string;
+    rimeModel: string;
+    rimeSpeaker: string;
+  }): Promise<void>;
+  getStatus(): Promise<{ kokoroBundled: boolean; cacheBytes: number }>;
+  fetchRimeVoices(options: { model: string }): Promise<{ voices: string[] }>;
+  clearCache(): Promise<{ cleared: boolean }>;
+  speak(options: { text: string; rate?: number; utteranceId?: string }): Promise<{ utteranceId: string }>;
+  speakSequence(options: {
+    sentences: string[];
+    startIndex: number;
+    rate: number;
+    loopSingle: boolean;
+  }): Promise<void>;
   stop(): Promise<void>;
   addListener(
-    eventName: 'ttsDone' | 'ttsError',
-    listenerFunc: (info: { utteranceId: string; error?: string }) => void,
+    eventName: 'ttsDone' | 'ttsSentenceStart' | 'ttsSequenceDone',
+    listenerFunc: (info: { utteranceId?: string; index?: number; completed?: boolean }) => void,
   ): Promise<PluginListenerHandle>;
 }
 
@@ -42,108 +59,84 @@ const AppUpdaterPlugin = registerPlugin<AppUpdaterPluginInterface>('AppUpdater')
 export const isNativeAndroid = (): boolean =>
   Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 
-let activeHtmlAudio: HTMLAudioElement | null = null;
-let audioAbortToken = 0;
+let seqListeners: PluginListenerHandle[] = [];
+let webSeqAborted = false;
 
-function splitForNeuralAudio(text: string, maxLen = 175): string[] {
-  const clean = text.replace(/\s+/g, ' ').trim();
-  if (clean.length <= maxLen) return [clean];
-  const parts: string[] = [];
-  const clauses = clean.split(/(?<=[,;:\-—])\s+/);
-  let buf = '';
-  for (const c of clauses) {
-    if ((buf + ' ' + c).trim().length <= maxLen) {
-      buf = (buf + ' ' + c).trim();
-    } else {
-      if (buf) parts.push(buf);
-      if (c.length <= maxLen) {
-        buf = c;
-      } else {
-        // Split very long clause by words
-        const words = c.split(' ');
-        let wbuf = '';
-        for (const w of words) {
-          if ((wbuf + ' ' + w).trim().length <= maxLen) {
-            wbuf = (wbuf + ' ' + w).trim();
-          } else {
-            if (wbuf) parts.push(wbuf);
-            wbuf = w;
-          }
-        }
-        buf = wbuf;
-      }
+async function clearSeqListeners() {
+  for (const h of seqListeners) {
+    try {
+      await h.remove();
+    } catch {
+      // ignore
     }
   }
-  if (buf) parts.push(buf);
-  return parts;
+  seqListeners = [];
 }
 
-async function playOnlineNeuralChunks(
-  text: string,
-  rate: number,
-  locale: 'en-US' | 'en-GB',
-  token: number,
-): Promise<boolean> {
-  const chunks = splitForNeuralAudio(text);
-  const tl = locale === 'en-GB' ? 'en-GB' : 'en-US';
-
-  for (const chunk of chunks) {
-    if (token !== audioAbortToken) return true;
-    const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${tl}&q=${encodeURIComponent(chunk)}`;
-    const ok = await new Promise<boolean>((resolve) => {
-      const audio = new Audio(url);
-      activeHtmlAudio = audio;
-      audio.playbackRate = Math.max(0.65, Math.min(1.6, rate));
-      audio.onended = () => resolve(true);
-      audio.onerror = () => resolve(false);
-      audio.play().catch(() => resolve(false));
+export async function configureSpeechEngine(voice: VoiceConfig): Promise<void> {
+  if (!isNativeAndroid()) return;
+  try {
+    await NativeTtsPlugin.configure({
+      engine: voice.engine,
+      kokoroSpeaker: voice.kokoroSpeaker,
+      rimeApiKey: voice.rimeApiKey,
+      rimeModel: voice.rimeModel,
+      rimeSpeaker: voice.rimeSpeaker,
     });
-    if (!ok) return false;
+  } catch {
+    // ignore
   }
-  return true;
 }
 
-export async function getAvailableVoices(): Promise<DeviceVoice[]> {
+export async function getSpeechStatus(): Promise<{ kokoroBundled: boolean; cacheBytes: number }> {
+  if (!isNativeAndroid()) {
+    return { kokoroBundled: false, cacheBytes: 0 };
+  }
+  try {
+    return await NativeTtsPlugin.getStatus();
+  } catch {
+    return { kokoroBundled: false, cacheBytes: 0 };
+  }
+}
+
+export async function fetchRimeVoices(model: 'coda' | 'mistv3'): Promise<string[]> {
   if (isNativeAndroid()) {
     try {
-      const res = await NativeTtsPlugin.getVoices();
-      return res.voices ?? [];
+      const res = await NativeTtsPlugin.fetchRimeVoices({ model });
+      if (res.voices?.length) return res.voices;
     } catch {
-      return [];
+      // fallback
     }
   }
-  return [];
+  try {
+    const res = await fetch('https://users.rime.ai/data/voices/all-v2.json');
+    if (res.ok) {
+      const data = await res.json();
+      const eng = data?.[model]?.eng;
+      if (Array.isArray(eng) && eng.length > 0) return eng as string[];
+    }
+  } catch {
+    // fallback
+  }
+  return ['astra', 'celeste', 'mesa', 'marsh', 'cove', 'orion'];
 }
 
-/**
- * Speak English text with natural neural audio first (when enabled & online),
- * seamlessly falling back to the highest-quality on-device Android TTS voice.
- */
+export async function clearSpeechCache(): Promise<boolean> {
+  if (!isNativeAndroid()) return false;
+  try {
+    const res = await NativeTtsPlugin.clearCache();
+    return Boolean(res.cleared);
+  } catch {
+    return false;
+  }
+}
+
 export async function speakText(
   text: string,
-  options: {
-    rate?: number;
-    locale?: 'en-US' | 'en-GB';
-    voiceMode?: 'neural_online' | 'device_best';
-    voiceName?: string;
-    onEnd?: () => void;
-  } = {},
+  options: { rate?: number; locale?: 'en-US' | 'en-GB'; onEnd?: () => void } = {},
 ): Promise<void> {
-  const rate = options.rate ?? 0.9;
+  const rate = options.rate ?? 0.92;
   const locale = options.locale ?? 'en-US';
-  const voiceMode = options.voiceMode ?? 'neural_online';
-
-  await stopSpeaking();
-  const myToken = ++audioAbortToken;
-
-  if (voiceMode === 'neural_online' && navigator.onLine) {
-    const played = await playOnlineNeuralChunks(text, rate, locale, myToken);
-    if (myToken !== audioAbortToken) return;
-    if (played) {
-      options.onEnd?.();
-      return;
-    }
-  }
 
   if (isNativeAndroid()) {
     const utteranceId = `utt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -152,51 +145,84 @@ export async function speakText(
       handle = await NativeTtsPlugin.addListener('ttsDone', (info) => {
         if (info.utteranceId === utteranceId) {
           handle?.remove();
-          if (myToken === audioAbortToken) {
-            options.onEnd?.();
-          }
+          options.onEnd?.();
         }
       });
     }
-    await NativeTtsPlugin.speak({
-      text,
-      rate,
-      locale,
-      voiceName: options.voiceName || '',
-      utteranceId,
-    });
+    await NativeTtsPlugin.speak({ text, rate, utteranceId });
     return;
   }
 
-  // Browser fallback
+  // Web preview fallback
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = locale;
     utter.rate = rate;
-    utter.onend = () => {
-      if (myToken === audioAbortToken) options.onEnd?.();
-    };
-    utter.onerror = () => {
-      if (myToken === audioAbortToken) options.onEnd?.();
-    };
+    utter.onend = () => options.onEnd?.();
+    utter.onerror = () => options.onEnd?.();
     window.speechSynthesis.speak(utter);
   } else {
     options.onEnd?.();
   }
 }
 
-export async function stopSpeaking(): Promise<void> {
-  audioAbortToken++;
-  if (activeHtmlAudio) {
-    try {
-      activeHtmlAudio.pause();
-      activeHtmlAudio.src = '';
-    } catch {
-      // ignore
-    }
-    activeHtmlAudio = null;
+/**
+ * Play a sequence of sentences continuously using native Kokoro/Rime prefetching.
+ */
+export async function speakSequence(
+  sentences: string[],
+  options: {
+    startIndex: number;
+    rate: number;
+    loopSingle: boolean;
+    onSentenceStart: (index: number) => void;
+    onComplete: () => void;
+  },
+): Promise<void> {
+  await stopSpeaking();
+  await clearSeqListeners();
+
+  if (isNativeAndroid()) {
+    const h1 = await NativeTtsPlugin.addListener('ttsSentenceStart', (info) => {
+      if (typeof info.index === 'number') options.onSentenceStart(info.index);
+    });
+    const h2 = await NativeTtsPlugin.addListener('ttsSequenceDone', () => {
+      clearSeqListeners();
+      options.onComplete();
+    });
+    seqListeners = [h1, h2];
+    await NativeTtsPlugin.speakSequence({
+      sentences,
+      startIndex: options.startIndex,
+      rate: options.rate,
+      loopSingle: options.loopSingle,
+    });
+    return;
   }
+
+  // Web preview sequential fallback
+  webSeqAborted = false;
+  const playIdx = (idx: number) => {
+    if (webSeqAborted || idx >= sentences.length) {
+      if (!webSeqAborted) options.onComplete();
+      return;
+    }
+    options.onSentenceStart(idx);
+    speakText(sentences[idx], {
+      rate: options.rate,
+      onEnd: () => {
+        if (webSeqAborted) return;
+        playIdx(options.loopSingle ? idx : idx + 1);
+      },
+    });
+  };
+  playIdx(options.startIndex);
+}
+
+export async function stopSpeaking(): Promise<void> {
+  webSeqAborted = true;
+  await clearSeqListeners();
   if (isNativeAndroid()) {
     try {
       await NativeTtsPlugin.stop();

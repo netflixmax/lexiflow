@@ -1,7 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Eye,
-  EyeOff,
   Headphones,
   Loader2,
   Pause,
@@ -13,10 +11,18 @@ import {
   RotateCw,
   SkipBack,
   SkipForward,
+  SlidersHorizontal,
   Volume2,
+  X,
 } from 'lucide-react';
 import { fetchPodcastEpisodes } from '../services/feeds';
-import { speakText, stopSpeaking } from '../services/nativeBridge';
+import {
+  fetchRimeVoices,
+  KOKORO_SPEAKERS,
+  speakSequence,
+  stopSpeaking,
+} from '../services/nativeBridge';
+import { segmentIntoSenseGroups, splitParagraphToSentences } from '../services/senseGroup';
 import { translateEnToZh } from '../services/translator';
 import type { ContentItem, PodcastEpisode, PodcastFeed, ReaderSettings } from '../types';
 
@@ -30,24 +36,13 @@ interface ListenViewProps {
   onRecordListening: (minutes: number) => void;
 }
 
-function splitToSentences(item: ContentItem | null): string[] {
+function extractSentences(item: ContentItem | null): string[] {
   if (!item) return [];
   const paragraphs =
     item.chapters && item.chapters.length > 0
       ? item.chapters[item.currentChapter ?? 0]?.paragraphs ?? []
       : item.paragraphs;
-
-  const out: string[] = [];
-  for (const p of paragraphs) {
-    const matches = p.match(/[^.!?]+[.!?]+|[^.!?]+$/g);
-    if (matches) {
-      for (const s of matches) {
-        const clean = s.trim();
-        if (clean.length >= 6) out.push(clean);
-      }
-    }
-  }
-  return out;
+  return paragraphs.flatMap((p) => splitParagraphToSentences(p)).filter((s) => s.length >= 6);
 }
 
 export const ListenView: React.FC<ListenViewProps> = ({
@@ -73,9 +68,9 @@ export const ListenView: React.FC<ListenViewProps> = ({
     () => library.find((i) => i.id === selectedId) ?? library[0] ?? null,
     [library, selectedId],
   );
-  const sentences = useMemo(() => splitToSentences(currentItem), [currentItem]);
+  const sentences = useMemo(() => extractSentences(currentItem), [currentItem]);
 
-  // Article synced TTS state
+  // Article synced Kokoro / Rime state
   const [sentenceIdx, setSentenceIdx] = useState(0);
   const [isPlayingTts, setIsPlayingTts] = useState(false);
   const [loopSentence, setLoopSentence] = useState(false);
@@ -84,40 +79,44 @@ export const ListenView: React.FC<ListenViewProps> = ({
   const [revealedIdx, setRevealedIdx] = useState<Set<number>>(new Set());
   const [dictationInput, setDictationInput] = useState('');
 
-  const playingRef = useRef(false);
-  const loopRef = useRef(false);
-  const idxRef = useRef(0);
-  const sentencesRef = useRef<string[]>([]);
-  const rateRef = useRef(readerSettings.ttsRate);
-  const accentRef = useRef(readerSettings.ttsAccent);
-  const voiceModeRef = useRef(readerSettings.ttsVoiceMode);
-  const voiceNameRef = useRef(readerSettings.ttsVoiceName);
+  // Quick Voice Engine Sheet (Kokoro Offline / Rime Cloud)
+  const [showVoiceSheet, setShowVoiceSheet] = useState(false);
+  const [rimeVoiceList, setRimeVoiceList] = useState<string[]>([
+    'astra',
+    'celeste',
+    'mesa',
+    'marsh',
+    'cove',
+    'orion',
+  ]);
+  const [loadingRimeVoices, setLoadingRimeVoices] = useState(false);
+
   const sessionStartRef = useRef<number | null>(null);
 
+  const commitListeningTime = () => {
+    if (sessionStartRef.current) {
+      const mins = Math.round((Date.now() - sessionStartRef.current) / 60000);
+      if (mins >= 1) onRecordListening(mins);
+      sessionStartRef.current = null;
+    }
+  };
+
   useEffect(() => {
-    loopRef.current = loopSentence;
-  }, [loopSentence]);
-  useEffect(() => {
-    sentencesRef.current = sentences;
     setSentenceIdx(0);
-    idxRef.current = 0;
     setRevealedIdx(new Set());
     setSentenceZh({});
-    stopTtsPlayback();
+    setIsPlayingTts(false);
+    stopSpeaking();
   }, [sentences]);
-  useEffect(() => {
-    rateRef.current = readerSettings.ttsRate;
-    accentRef.current = readerSettings.ttsAccent;
-    voiceModeRef.current = readerSettings.ttsVoiceMode;
-    voiceNameRef.current = readerSettings.ttsVoiceName;
-  }, [
-    readerSettings.ttsRate,
-    readerSettings.ttsAccent,
-    readerSettings.ttsVoiceMode,
-    readerSettings.ttsVoiceName,
-  ]);
 
-  // Preload Chinese subtitles smoothly in Bilingual Flow stage
+  useEffect(() => {
+    return () => {
+      stopSpeaking();
+      commitListeningTime();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (listenStage !== 'bilingual' || sentences.length === 0) return;
     let cancelled = false;
@@ -135,75 +134,58 @@ export const ListenView: React.FC<ListenViewProps> = ({
     };
   }, [listenStage, sentences]);
 
-  const commitListeningTime = () => {
-    if (sessionStartRef.current) {
-      const mins = Math.round((Date.now() - sessionStartRef.current) / 60000);
-      if (mins >= 1) onRecordListening(mins);
-      sessionStartRef.current = null;
-    }
-  };
-
-  useEffect(() => {
-    return () => {
-      playingRef.current = false;
-      stopSpeaking();
-      commitListeningTime();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const playSentenceAt = (index: number) => {
-    const list = sentencesRef.current;
-    if (index < 0 || index >= list.length) {
-      playingRef.current = false;
-      setIsPlayingTts(false);
-      commitListeningTime();
-      return;
-    }
-    idxRef.current = index;
-    setSentenceIdx(index);
-    playingRef.current = true;
+  const startPlaybackAt = (index: number, forceLoop?: boolean) => {
+    if (sentences.length === 0) return;
+    const clamped = Math.max(0, Math.min(sentences.length - 1, index));
+    setSentenceIdx(clamped);
     setIsPlayingTts(true);
     if (!sessionStartRef.current) sessionStartRef.current = Date.now();
 
-    speakText(list[index], {
-      rate: rateRef.current,
-      locale: accentRef.current,
-      voiceMode: voiceModeRef.current,
-      voiceName: voiceNameRef.current,
-      onEnd: () => {
-        if (!playingRef.current) return;
-        if (loopRef.current) {
-          setTimeout(() => {
-            if (playingRef.current) playSentenceAt(idxRef.current);
-          }, 350);
-        } else if (idxRef.current + 1 < sentencesRef.current.length) {
-          setTimeout(() => {
-            if (playingRef.current) playSentenceAt(idxRef.current + 1);
-          }, 260);
-        } else {
-          playingRef.current = false;
-          setIsPlayingTts(false);
-          commitListeningTime();
-        }
+    speakSequence(sentences, {
+      startIndex: clamped,
+      rate: readerSettings.ttsRate,
+      loopSingle: forceLoop ?? loopSentence,
+      onSentenceStart: (idx) => {
+        setSentenceIdx(idx);
+      },
+      onComplete: () => {
+        setIsPlayingTts(false);
+        commitListeningTime();
       },
     });
   };
 
-  const stopTtsPlayback = () => {
-    playingRef.current = false;
+  const stopPlayback = () => {
     setIsPlayingTts(false);
     stopSpeaking();
     commitListeningTime();
   };
 
-  const toggleTts = () => {
-    if (isPlayingTts) {
-      stopTtsPlayback();
-    } else {
-      playSentenceAt(sentenceIdx);
+  const togglePlay = () => {
+    if (isPlayingTts) stopPlayback();
+    else startPlaybackAt(sentenceIdx);
+  };
+
+  const handleLoadRimeVoices = async (model: 'coda' | 'mistv3') => {
+    setLoadingRimeVoices(true);
+    try {
+      const list = await fetchRimeVoices(model);
+      setRimeVoiceList(list);
+    } finally {
+      setLoadingRimeVoices(false);
     }
   };
+
+  const activeVoiceBadge = useMemo(() => {
+    if (readerSettings.voice.engine === 'rime' && readerSettings.voice.rimeApiKey.trim()) {
+      return `Rime · ${readerSettings.voice.rimeSpeaker}`;
+    }
+    if (readerSettings.voice.engine === 'system') {
+      return '系统语音';
+    }
+    const sp = KOKORO_SPEAKERS.find((s) => s.id === readerSettings.voice.kokoroSpeaker);
+    return `Kokoro · ${sp?.name ?? 'Heart'}`;
+  }, [readerSettings.voice]);
 
   // Podcast state
   const [selectedFeed, setSelectedFeed] = useState<PodcastFeed>(podcastFeeds[0]);
@@ -244,7 +226,7 @@ export const ListenView: React.FC<ListenViewProps> = ({
   }, [mode]);
 
   const playEpisode = (ep: PodcastEpisode) => {
-    stopTtsPlayback();
+    stopPlayback();
     setActiveEp(ep);
     setTimeout(() => {
       if (audioRef.current) {
@@ -295,7 +277,7 @@ export const ListenView: React.FC<ListenViewProps> = ({
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-[22px] font-semibold tracking-tight text-[#1C1B18]">精听工坊</h1>
-            <p className="text-[12px] text-[#78756E] mt-0.5">单句复读 · 盲听听写 · 原声播客</p>
+            <p className="text-[12px] text-[#78756E] mt-0.5">Kokoro 离线 · Rime 云端 · 意群节律</p>
           </div>
           <div className="flex p-1 bg-[#EFECE6] rounded-xl">
             <button
@@ -372,39 +354,23 @@ export const ListenView: React.FC<ListenViewProps> = ({
                     {r}x
                   </button>
                 ))}
+
+                {/* Voice Engine Quick Switch Pill */}
                 <button
-                  onClick={() =>
-                    onUpdateSettings({
-                      ...readerSettings,
-                      ttsAccent: readerSettings.ttsAccent === 'en-US' ? 'en-GB' : 'en-US',
-                    })
-                  }
-                  className="px-2 py-1 rounded-md text-[11px] font-medium bg-[#F1EFEA] text-[#57544D]"
+                  onClick={() => setShowVoiceSheet(true)}
+                  className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1"
                 >
-                  {readerSettings.ttsAccent === 'en-US' ? '美音' : '英音'}
-                </button>
-                <button
-                  onClick={() =>
-                    onUpdateSettings({
-                      ...readerSettings,
-                      ttsVoiceMode:
-                        readerSettings.ttsVoiceMode === 'neural_online'
-                          ? 'device_best'
-                          : 'neural_online',
-                    })
-                  }
-                  className={`px-2 py-1 rounded-md text-[11px] font-medium ${
-                    readerSettings.ttsVoiceMode === 'neural_online'
-                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                      : 'bg-[#F1EFEA] text-[#57544D]'
-                  }`}
-                >
-                  {readerSettings.ttsVoiceMode === 'neural_online' ? '自然音色' : '本机离线'}
+                  <SlidersHorizontal className="w-3 h-3" />
+                  {activeVoiceBadge}
                 </button>
               </div>
 
               <button
-                onClick={() => setLoopSentence((v) => !v)}
+                onClick={() => {
+                  const next = !loopSentence;
+                  setLoopSentence(next);
+                  if (isPlayingTts) startPlaybackAt(sentenceIdx, next);
+                }}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-medium flex items-center gap-1 border ${
                   loopSentence
                     ? 'bg-amber-100 border-amber-400 text-amber-900'
@@ -435,11 +401,12 @@ export const ListenView: React.FC<ListenViewProps> = ({
             </div>
           )}
 
-          {/* Synchronized Sentences List */}
+          {/* Synchronized Sentences List with Native Sense-Group Rhythm */}
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2.5 pb-40">
             {sentences.map((s, idx) => {
               const active = idx === sentenceIdx;
               const isBlurred = listenStage === 'blind' && !revealedIdx.has(idx);
+              const groups = segmentIntoSenseGroups(s);
               return (
                 <div
                   key={idx}
@@ -448,7 +415,7 @@ export const ListenView: React.FC<ListenViewProps> = ({
                       setRevealedIdx((prev) => new Set(prev).add(idx));
                     } else {
                       setDictationInput('');
-                      playSentenceAt(idx);
+                      startPlaybackAt(idx);
                     }
                   }}
                   className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
@@ -460,7 +427,7 @@ export const ListenView: React.FC<ListenViewProps> = ({
                   <div className="flex items-center justify-between text-[11px] text-[#9A968C] mb-1">
                     <span>Sentence {idx + 1}</span>
                     {active && isPlayingTts && (
-                      <span className="flex items-center gap-1 text-amber-700 font-medium">
+                      <span className="flex items-center gap-1 text-emerald-700 font-medium">
                         <Volume2 className="w-3 h-3" /> 朗读中
                       </span>
                     )}
@@ -470,7 +437,16 @@ export const ListenView: React.FC<ListenViewProps> = ({
                       isBlurred ? 'blur-[6px] select-none' : ''
                     }`}
                   >
-                    {s}
+                    {groups.map((g, gIdx) => (
+                      <React.Fragment key={gIdx}>
+                        <span>{g.text}</span>
+                        {gIdx < groups.length - 1 && (
+                          <span className="mx-1.5 font-sans text-[12px] text-amber-600/55 select-none">
+                            /
+                          </span>
+                        )}
+                      </React.Fragment>
+                    ))}
                   </p>
                   {listenStage === 'bilingual' && sentenceZh[idx] && (
                     <p className="text-[13px] text-[#78756E] mt-1.5 leading-relaxed">
@@ -491,14 +467,14 @@ export const ListenView: React.FC<ListenViewProps> = ({
               <button
                 onClick={() => {
                   setDictationInput('');
-                  playSentenceAt(Math.max(0, sentenceIdx - 1));
+                  startPlaybackAt(Math.max(0, sentenceIdx - 1));
                 }}
                 className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
               >
                 <SkipBack className="w-4 h-4" />
               </button>
               <button
-                onClick={toggleTts}
+                onClick={togglePlay}
                 className="w-11 h-11 rounded-full bg-[#FAF9F6] text-[#1C1B18] flex items-center justify-center active:scale-95 transition-transform"
               >
                 {isPlayingTts ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
@@ -506,7 +482,7 @@ export const ListenView: React.FC<ListenViewProps> = ({
               <button
                 onClick={() => {
                   setDictationInput('');
-                  playSentenceAt(Math.min(sentences.length - 1, sentenceIdx + 1));
+                  startPlaybackAt(Math.min(sentences.length - 1, sentenceIdx + 1));
                 }}
                 className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
               >
@@ -514,7 +490,7 @@ export const ListenView: React.FC<ListenViewProps> = ({
               </button>
             </div>
             <button
-              onClick={() => playSentenceAt(sentenceIdx)}
+              onClick={() => startPlaybackAt(sentenceIdx)}
               className="text-[12px] text-[#C8C4BA] px-2 py-1 rounded-lg bg-white/10"
             >
               重听本句
@@ -524,7 +500,6 @@ export const ListenView: React.FC<ListenViewProps> = ({
       ) : (
         /* Podcast Mode */
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Feed Selector */}
           <div className="px-5 py-3 flex items-center gap-2 overflow-x-auto no-scrollbar border-b border-[#ECEAE4]">
             {podcastFeeds.map((feed) => (
               <button
@@ -588,7 +563,6 @@ export const ListenView: React.FC<ListenViewProps> = ({
             </div>
           )}
 
-          {/* Episodes */}
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2.5 pb-44">
             {loadingEpisodes ? (
               <div className="py-16 flex items-center justify-center gap-2 text-[#78756E] text-[14px]">
@@ -645,7 +619,6 @@ export const ListenView: React.FC<ListenViewProps> = ({
             )}
           </div>
 
-          {/* Native Audio Element + Mini Player */}
           <audio
             ref={audioRef}
             src={activeEp?.audioUrl}
@@ -705,6 +678,163 @@ export const ListenView: React.FC<ListenViewProps> = ({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Clean Voice Engine Quick Picker Sheet */}
+      {showVoiceSheet && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px] flex items-end justify-center">
+          <div className="w-full max-w-lg bg-[#FAF9F6] rounded-t-3xl p-5 pb-8 max-h-[82vh] overflow-y-auto space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-[17px] font-semibold text-[#1C1B18]">朗读语音引擎</h3>
+                <p className="text-[12px] text-[#78756E]">离线默认 Kokoro-82M 真人质感；可选 Rime 云端 API</p>
+              </div>
+              <button
+                onClick={() => setShowVoiceSheet(false)}
+                className="w-8 h-8 rounded-full bg-[#EFECE6] flex items-center justify-center text-[#57544D]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 p-1 bg-[#EFECE6] rounded-xl">
+              <button
+                onClick={() =>
+                  onUpdateSettings({
+                    ...readerSettings,
+                    voice: { ...readerSettings.voice, engine: 'kokoro' },
+                  })
+                }
+                className={`py-2 rounded-lg text-[13px] font-medium ${
+                  readerSettings.voice.engine === 'kokoro'
+                    ? 'bg-white text-[#1C1B18] shadow-xs'
+                    : 'text-[#6E6B64]'
+                }`}
+              >
+                Kokoro 离线（免费）
+              </button>
+              <button
+                onClick={() =>
+                  onUpdateSettings({
+                    ...readerSettings,
+                    voice: { ...readerSettings.voice, engine: 'rime' },
+                  })
+                }
+                className={`py-2 rounded-lg text-[13px] font-medium ${
+                  readerSettings.voice.engine === 'rime'
+                    ? 'bg-white text-[#1C1B18] shadow-xs'
+                    : 'text-[#6E6B64]'
+                }`}
+              >
+                Rime 云端（可选）
+              </button>
+            </div>
+
+            {readerSettings.voice.engine === 'kokoro' ? (
+              <div className="grid grid-cols-2 gap-2">
+                {KOKORO_SPEAKERS.map((sp) => {
+                  const active = readerSettings.voice.kokoroSpeaker === sp.id;
+                  return (
+                    <button
+                      key={sp.id}
+                      onClick={() =>
+                        onUpdateSettings({
+                          ...readerSettings,
+                          voice: { ...readerSettings.voice, engine: 'kokoro', kokoroSpeaker: sp.id },
+                        })
+                      }
+                      className={`p-2.5 rounded-xl border text-left transition-colors ${
+                        active
+                          ? 'bg-[#1C1B18] text-white border-[#1C1B18]'
+                          : 'bg-white text-[#1C1B18] border-[#E5E2DA]'
+                      }`}
+                    >
+                      <div className="text-[13px] font-semibold">{sp.name}</div>
+                      <div className={`text-[11px] ${active ? 'text-[#C8C4BA]' : 'text-[#8E8A80]'}`}>
+                        {sp.desc}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[11px] text-[#78756E] block mb-1">
+                    Rime API Key（未填或断网时自动回退离线 Kokoro）
+                  </label>
+                  <input
+                    type="password"
+                    value={readerSettings.voice.rimeApiKey}
+                    onChange={(e) =>
+                      onUpdateSettings({
+                        ...readerSettings,
+                        voice: { ...readerSettings.voice, rimeApiKey: e.target.value },
+                      })
+                    }
+                    placeholder="输入 Rime API Key…"
+                    className="w-full h-10 px-3 rounded-xl bg-white border border-[#E5E2DA] text-[13px]"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {(['coda', 'mistv3'] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => {
+                        onUpdateSettings({
+                          ...readerSettings,
+                          voice: { ...readerSettings.voice, rimeModel: m },
+                        });
+                        handleLoadRimeVoices(m);
+                      }}
+                      className={`px-3.5 py-1.5 rounded-lg text-[12px] border ${
+                        readerSettings.voice.rimeModel === m
+                          ? 'bg-[#1C1B18] text-white border-[#1C1B18]'
+                          : 'bg-white text-[#57544D] border-[#E5E2DA]'
+                      }`}
+                    >
+                      模型: {m}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => handleLoadRimeVoices(readerSettings.voice.rimeModel)}
+                    className="ml-auto text-[12px] text-[#57544D] underline"
+                  >
+                    {loadingRimeVoices ? '拉取音色中…' : '刷新官方音色列表'}
+                  </button>
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-[#78756E] block mb-1">Rime 英文音色</label>
+                  <select
+                    value={readerSettings.voice.rimeSpeaker}
+                    onChange={(e) =>
+                      onUpdateSettings({
+                        ...readerSettings,
+                        voice: { ...readerSettings.voice, rimeSpeaker: e.target.value },
+                      })
+                    }
+                    className="w-full h-10 px-3 rounded-xl bg-white border border-[#E5E2DA] text-[13px]"
+                  >
+                    {rimeVoiceList.map((v) => (
+                      <option key={v} value={v}>
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowVoiceSheet(false)}
+              className="w-full h-10 rounded-xl bg-[#1C1B18] text-white text-[13px] font-medium"
+            >
+              完成
+            </button>
+          </div>
         </div>
       )}
     </div>

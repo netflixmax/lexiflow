@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { BookOpen, Brain, Headphones, User } from 'lucide-react';
 import type { Grade } from 'ts-fsrs';
 import { LibraryView } from './components/LibraryView';
@@ -8,6 +8,7 @@ import { ReaderView } from './components/ReaderView';
 import { VocabView } from './components/VocabView';
 import { STARTER_WORDS } from './data/starterDecks';
 import { createNewFsrsCard, isCardDue, reviewFsrsCard } from './services/fsrsService';
+import { configureSpeechEngine } from './services/nativeBridge';
 import {
   loadAiConfig,
   loadLibrary,
@@ -46,6 +47,10 @@ export function App() {
 
   const [readingItemId, setReadingItemId] = useState<string | null>(null);
   const [listeningArticle, setListeningArticle] = useState<ContentItem | null>(null);
+
+  useEffect(() => {
+    configureSpeechEngine(readerSettings.voice);
+  }, [readerSettings.voice]);
 
   const readingItem = useMemo(
     () => library.find((i) => i.id === readingItemId) ?? null,
@@ -225,6 +230,8 @@ export function App() {
             vocabCount={vocab.length}
             aiConfig={aiConfig}
             updateConfig={updateConfig}
+            readerSettings={readerSettings}
+            onUpdateReaderSettings={handleUpdateSettings}
             onUpdateAiConfig={handleUpdateAiConfig}
             onUpdateUpdateConfig={handleUpdateUpdateConfig}
             onDataImported={handleReloadAll}

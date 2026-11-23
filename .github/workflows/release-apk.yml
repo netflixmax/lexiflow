@@ -1,4 +1,4 @@
-name: Build & Release LexiFlow APK
+name: Build & Release LexiFlow APK (Kokoro + Rime)
 
 on:
   push:
@@ -36,30 +36,83 @@ jobs:
           npm run build
           npx cap sync android
 
-      - name: Decode Release Keystore (if configured in Secrets)
-        if: ${{ secrets.LEXIFLOW_KEYSTORE_BASE64 != '' }}
+      - name: Download sherpa-onnx Android AAR (Offline Kokoro Engine)
         run: |
-          echo "${{ secrets.LEXIFLOW_KEYSTORE_BASE64 }}" | base64 -d > android/app/lexiflow-release.keystore
+          mkdir -p android/app/libs
+          AAR_URL=$(curl -s "https://api.github.com/repos/k2-fsa/sherpa-onnx/releases/latest" | grep -o '"browser_download_url": *"[^"]*sherpa-onnx-[0-9][0-9.]*\.aar"' | head -n 1 | cut -d'"' -f 4)
+          if [ -z "$AAR_URL" ]; then
+            AAR_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.3/sherpa-onnx-2.0.3.aar"
+          fi
+          echo "Downloading AAR: $AAR_URL"
+          curl -fL "$AAR_URL" -o android/app/libs/sherpa-onnx.aar
+          ls -lh android/app/libs/
+
+      - name: Download Kokoro-82M Offline English Model (int8) + Lexicon
+        run: |
+          mkdir -p android/app/src/main/assets/kokoro-en
+          if ! curl -fL "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-int8-en-v0_19.tar.bz2" -o /tmp/kokoro.tar.bz2; then
+            curl -fL "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2" -o /tmp/kokoro.tar.bz2
+          fi
+          rm -rf /tmp/kokoro-extract && mkdir -p /tmp/kokoro-extract
+          tar -xjf /tmp/kokoro.tar.bz2 -C /tmp/kokoro-extract
+          if [ -f /tmp/kokoro-extract/model.int8.onnx ] || [ -f /tmp/kokoro-extract/model.onnx ]; then
+            cp -r /tmp/kokoro-extract/. android/app/src/main/assets/kokoro-en/
+          else
+            INNER=$(find /tmp/kokoro-extract -mindepth 1 -maxdepth 1 -type d | head -n 1)
+            cp -r "$INNER"/. android/app/src/main/assets/kokoro-en/
+          fi
+          curl -fL "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/lexicon-en-us.txt" -o android/app/src/main/assets/kokoro-en/lexicon.txt
+          ls -lh android/app/src/main/assets/kokoro-en/
+          test -f android/app/src/main/assets/kokoro-en/voices.bin
+          test -f android/app/src/main/assets/kokoro-en/tokens.txt
+          test -f android/app/src/main/assets/kokoro-en/lexicon.txt
+          test -d android/app/src/main/assets/kokoro-en/espeak-ng-data
+
+      - name: Decrypt Release Keystore
+        env:
+          KEYSTORE_ENC_PASSPHRASE: ${{ secrets.LEXIFLOW_KEYSTORE_PASSPHRASE }}
+        run: |
+          openssl enc -d -aes-256-cbc -pbkdf2 \
+            -in signing/lexiflow-release.keystore.enc \
+            -out android/app/lexiflow-release.keystore \
+            -pass pass:"$KEYSTORE_ENC_PASSPHRASE"
+          test -s android/app/lexiflow-release.keystore
 
       - name: Build Signed Release APK
         env:
+          LEXIFLOW_KEYSTORE_PATH: lexiflow-release.keystore
           LEXIFLOW_STORE_PASSWORD: ${{ secrets.LEXIFLOW_STORE_PASSWORD }}
           LEXIFLOW_KEY_ALIAS: ${{ secrets.LEXIFLOW_KEY_ALIAS }}
           LEXIFLOW_KEY_PASSWORD: ${{ secrets.LEXIFLOW_KEY_PASSWORD }}
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease --no-daemon
 
-      - name: Rename APK
+      - name: Prepare & Verify Release APK
         run: |
-          VERSION="${GITHUB_REF_NAME:-v1.0.0}"
+          VERSION="${GITHUB_REF_NAME:-v1.2.0}"
           APK=$(ls android/app/build/outputs/apk/release/*.apk | head -n 1)
           cp "$APK" "LexiFlow-${VERSION}.apk"
+          ls -lh "LexiFlow-${VERSION}.apk"
+          sha256sum "LexiFlow-${VERSION}.apk"
+          unzip -l "LexiFlow-${VERSION}.apk" | grep "assets/kokoro-en/lexicon.txt"
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LexiFlow-release-apk
+          path: LexiFlow-*.apk
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          name: "LexiFlow ${{ github.ref_name }} — 母语者意群 + Kokoro 离线 & Rime 云端语音"
+          body: |
+            ### 核心升级（围绕母语者视角 + 自然语音 + 零压力习得）
+            1. **母语者意群精读与顺译**：阅读器默认开启「意群」模式，按英文自然呼吸语块切分；点任意单词可一键展开**「母语者意群顺译」**（100% 免费），按英文原语序从左到右理解，彻底告别倒装回译。
+            2. **离线内置 Kokoro-82M 神经网络语音（免费）**：告别手机自带机械音！内置 11 种自然真人质感美式音色（默认温暖女声 Heart），流式播放 + 后台预合成下一句，句间顺滑无卡顿。
+            3. **支持 Rime 云端语音 API（可选）**：在「精听 → 音色」或「我的 → 语音引擎」中填入你的 Rime API Key，即可使用 `coda` / `mistv3` 播客级音色，带 SHA-256 本地音频缓存，复读不重复计费，断网自动无缝回退离线 Kokoro。
+            4. **三阶自然听力法 + 意群节律**：①双语磨耳 → ②英文跟读 → ③盲听挑战，配合 Kokoro/Rime 真人音色与意群节奏，让听力自然提升。
           files: LexiFlow-*.apk
-          generate_release_notes: true

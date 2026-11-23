@@ -16,6 +16,12 @@ import {
 import { analyzeSentenceSyntax, distillArticleInsight, explainWordInContext } from '../services/aiTutor';
 import { lookupWord } from '../services/dictionary';
 import { speakText } from '../services/nativeBridge';
+import {
+  segmentIntoSenseGroups,
+  splitParagraphToSentences,
+  translateSenseGroupsLinear,
+} from '../services/senseGroup';
+import type { SenseGroup } from '../services/senseGroup';
 import { translateEnToZh } from '../services/translator';
 import type {
   AiConfig,
@@ -41,7 +47,7 @@ interface ReaderViewProps {
 
 const THEME_STYLES: Record<
   ReaderTheme,
-  { bg: string; text: string; muted: string; border: string; sheetBg: string }
+  { bg: string; text: string; muted: string; border: string; sheetBg: string; divider: string }
 > = {
   light: {
     bg: 'bg-[#FAF9F6]',
@@ -49,6 +55,7 @@ const THEME_STYLES: Record<
     muted: 'text-[#78756E]',
     border: 'border-[#ECEAE4]',
     sheetBg: 'bg-white',
+    divider: 'text-amber-600/55',
   },
   sepia: {
     bg: 'bg-[#F4ECD8]',
@@ -56,6 +63,7 @@ const THEME_STYLES: Record<
     muted: 'text-[#75654E]',
     border: 'border-[#E3D6BC]',
     sheetBg: 'bg-[#FAF4E6]',
+    divider: 'text-amber-800/50',
   },
   dark: {
     bg: 'bg-[#141413]',
@@ -63,11 +71,12 @@ const THEME_STYLES: Record<
     muted: 'text-[#969288]',
     border: 'border-[#272624]',
     sheetBg: 'bg-[#1E1D1B]',
+    divider: 'text-amber-400/55',
   },
 };
 
 function extractSentenceForParagraph(paragraph: string, targetWord: string): string {
-  const sentences = paragraph.match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [paragraph];
+  const sentences = splitParagraphToSentences(paragraph);
   const lower = targetWord.toLowerCase();
   const hit = sentences.find((s) => s.toLowerCase().includes(lower));
   return (hit ?? paragraph).trim();
@@ -100,12 +109,15 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
   const [showAppearance, setShowAppearance] = useState(false);
 
-  // Word lookup sheet state
+  // Word lookup & linear sense-group breakdown sheet state
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
   const [selectedSentence, setSelectedSentence] = useState<string>('');
   const [lookupLoading, setLookupLoading] = useState(false);
   const [entry, setEntry] = useState<DictionaryEntry | null>(null);
   const [justSaved, setJustSaved] = useState(false);
+  const [linearChunks, setLinearChunks] = useState<Array<SenseGroup & { zh: string }>>([]);
+  const [showLinearChunks, setShowLinearChunks] = useState(false);
+  const [loadingLinear, setLoadingLinear] = useState(false);
 
   // Optional AI states
   const [aiLoading, setAiLoading] = useState(false);
@@ -157,6 +169,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     setJustSaved(savedWordSet.has(cleaned.toLowerCase()));
     setAiResult(null);
     setAiError(null);
+    setLinearChunks([]);
+    setShowLinearChunks(false);
 
     try {
       const res = await lookupWord(cleaned);
@@ -167,32 +181,35 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     }
   };
 
+  const handleLoadLinearSenseGroups = async () => {
+    if (!selectedSentence) return;
+    setShowLinearChunks(true);
+    if (linearChunks.length > 0) return;
+    setLoadingLinear(true);
+    try {
+      const groups = segmentIntoSenseGroups(selectedSentence);
+      const withZh = await translateSenseGroupsLinear(groups);
+      setLinearChunks(withZh);
+    } finally {
+      setLoadingLinear(false);
+    }
+  };
+
   const handlePronounce = (text: string, audioUrl?: string) => {
     if (audioUrl) {
       const audio = new Audio(audioUrl);
       audio.play().catch(() => {
-        speakText(text, {
-          rate: 0.9,
-          locale: readerSettings.ttsAccent,
-          voiceMode: readerSettings.ttsVoiceMode,
-          voiceName: readerSettings.ttsVoiceName,
-        });
+        speakText(text, { rate: 0.9, locale: readerSettings.ttsAccent });
       });
       return;
     }
-    speakText(text, {
-      rate: 0.9,
-      locale: readerSettings.ttsAccent,
-      voiceMode: readerSettings.ttsVoiceMode,
-      voiceName: readerSettings.ttsVoiceName,
-    });
+    speakText(text, { rate: 0.9, locale: readerSettings.ttsAccent });
   };
 
   const handleSaveWord = () => {
     if (!selectedWord) return;
     const targetWord = entry?.word || selectedWord.toLowerCase();
-    const defText =
-      entry?.definitions?.[0]?.definition || 'Saved from reading context.';
+    const defText = entry?.definitions?.[0]?.definition || 'Saved from reading context.';
     onMineWord({
       word: targetWord,
       phonetic: entry?.phonetic,
@@ -275,6 +292,33 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     });
   };
 
+  const renderTappableText = (text: string, paragraph: string) => {
+    const tokens = text.split(/([A-Za-z][A-Za-z'-]*)/g);
+    return tokens.map((tok, tIdx) => {
+      if (!/^[A-Za-z]/.test(tok)) {
+        return <React.Fragment key={tIdx}>{tok}</React.Fragment>;
+      }
+      const lower = tok.toLowerCase();
+      const isSaved = readerSettings.highlightSavedWords && savedWordSet.has(lower);
+      const isSelected = selectedWord?.toLowerCase() === lower;
+      return (
+        <span
+          key={tIdx}
+          onClick={() => handleTapWord(tok, paragraph)}
+          className={`cursor-pointer rounded-xs transition-colors ${
+            isSelected
+              ? 'bg-amber-300/70 text-[#1C1B18]'
+              : isSaved
+                ? 'border-b-[1.5px] border-amber-500/70'
+                : 'active:bg-amber-200/50'
+          }`}
+        >
+          {tok}
+        </span>
+      );
+    });
+  };
+
   return (
     <div className={`fixed inset-0 z-40 flex flex-col ${theme.bg} ${theme.text}`}>
       {/* Minimal Top Bar */}
@@ -290,6 +334,24 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         </button>
 
         <div className="flex items-center gap-1.5">
+          {/* Native-Speaker Sense-Group Toggle */}
+          <button
+            onClick={() =>
+              onUpdateSettings({
+                ...readerSettings,
+                showSenseGroups: !readerSettings.showSenseGroups,
+              })
+            }
+            className={`h-8 px-2.5 rounded-full border text-[12px] font-medium transition-colors ${
+              readerSettings.showSenseGroups
+                ? 'bg-emerald-600/15 border-emerald-500/40 text-emerald-800 dark:text-emerald-300'
+                : `${theme.border}`
+            }`}
+          >
+            意群
+          </button>
+
+          {/* Bilingual Toggle */}
           <button
             onClick={() =>
               onUpdateSettings({
@@ -311,7 +373,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
           <button
             onClick={() => onSendToListen(item)}
-            className={`h-8 px-3 rounded-full border ${theme.border} text-[12px] font-medium flex items-center gap-1.5`}
+            className={`h-8 px-2.5 rounded-full border ${theme.border} text-[12px] font-medium flex items-center gap-1`}
           >
             <Headphones className="w-3.5 h-3.5" />
             精听
@@ -320,10 +382,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           {aiReady && (
             <button
               onClick={handleArticleInsight}
-              className={`h-8 px-3 rounded-full border ${theme.border} text-[12px] font-medium flex items-center gap-1`}
+              className={`h-8 px-2.5 rounded-full border ${theme.border} text-[12px] font-medium flex items-center gap-1`}
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-              导读
             </button>
           )}
 
@@ -422,7 +483,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             <div className={`text-[14px] font-medium mt-2 ${theme.muted}`}>{activeChapterTitle}</div>
           )}
           <p className={`text-[12px] mt-3 ${theme.muted}`}>
-            轻点任意英文单词即可查词、听发音并连同原句存入 FSRS 词库
+            {readerSettings.showSenseGroups
+              ? '母语者意群模式已开启：顺着「/」按意群从左往右读，点任意词可看「意群顺译」'
+              : '轻点任意英文单词即可查词、听发音并连同原句存入 FSRS 词库'}
           </p>
         </div>
 
@@ -434,33 +497,32 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           }}
         >
           {activeParagraphs.map((para, pIdx) => {
-            const tokens = para.split(/([A-Za-z][A-Za-z'-]*)/g);
+            const sentences = splitParagraphToSentences(para);
             return (
               <div key={pIdx} className="space-y-1.5">
                 <p className="tracking-[0.005em]">
-                  {tokens.map((tok, tIdx) => {
-                    if (!/^[A-Za-z]/.test(tok)) {
-                      return <React.Fragment key={tIdx}>{tok}</React.Fragment>;
-                    }
-                    const lower = tok.toLowerCase();
-                    const isSaved = readerSettings.highlightSavedWords && savedWordSet.has(lower);
-                    const isSelected = selectedWord?.toLowerCase() === lower;
-                    return (
-                      <span
-                        key={tIdx}
-                        onClick={() => handleTapWord(tok, para)}
-                        className={`cursor-pointer rounded-xs transition-colors ${
-                          isSelected
-                            ? 'bg-amber-300/70 text-[#1C1B18]'
-                            : isSaved
-                              ? 'border-b-[1.5px] border-amber-500/70'
-                              : 'active:bg-amber-200/50'
-                        }`}
-                      >
-                        {tok}
-                      </span>
-                    );
-                  })}
+                  {readerSettings.showSenseGroups
+                    ? sentences.map((sent, sIdx) => {
+                        const groups = segmentIntoSenseGroups(sent);
+                        return (
+                          <React.Fragment key={sIdx}>
+                            {groups.map((g, gIdx) => (
+                              <React.Fragment key={gIdx}>
+                                <span>{renderTappableText(g.text, para)}</span>
+                                {gIdx < groups.length - 1 && (
+                                  <span
+                                    className={`mx-1.5 font-sans text-[0.72em] select-none font-normal ${theme.divider}`}
+                                  >
+                                    /
+                                  </span>
+                                )}
+                              </React.Fragment>
+                            ))}
+                            {sIdx < sentences.length - 1 ? '  ' : ''}
+                          </React.Fragment>
+                        );
+                      })
+                    : renderTappableText(para, para)}
                 </p>
                 {readerSettings.showBilingual && paraZh[pIdx] && (
                   <p
@@ -514,10 +576,10 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         </div>
       </div>
 
-      {/* Tap-Word Bottom Sheet */}
+      {/* Tap-Word + Native Linear Sense-Group Bottom Sheet */}
       {selectedWord && (
         <div
-          className={`fixed inset-x-0 bottom-0 z-50 ${theme.sheetBg} border-t ${theme.border} rounded-t-3xl shadow-2xl px-5 pt-4 pb-6 max-h-[65vh] overflow-y-auto`}
+          className={`fixed inset-x-0 bottom-0 z-50 ${theme.sheetBg} border-t ${theme.border} rounded-t-3xl shadow-2xl px-5 pt-4 pb-6 max-h-[72vh] overflow-y-auto`}
         >
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -542,7 +604,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 </button>
               </div>
               {entry?.zhHint && (
-                <div className="text-[14px] font-medium text-amber-700 dark:text-amber-400 mt-1">
+                <div className="text-[15px] font-semibold text-amber-700 dark:text-amber-400 mt-1">
                   {entry.zhHint}
                 </div>
               )}
@@ -556,39 +618,29 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             </button>
           </div>
 
-          <div className="mt-3">
+          <div className="mt-2.5">
             {lookupLoading ? (
-              <div className={`py-4 flex items-center gap-2 text-[13px] ${theme.muted}`}>
+              <div className={`py-3 flex items-center gap-2 text-[13px] ${theme.muted}`}>
                 <Loader2 className="w-4 h-4 animate-spin" /> 正在查询开源词典…
               </div>
             ) : (
-              <ul className="space-y-2 text-[14px] leading-relaxed">
-                {entry?.definitions.slice(0, 3).map((d, i) => (
+              <ul className="space-y-1.5 text-[13.5px] leading-relaxed">
+                {entry?.definitions.slice(0, 2).map((d, i) => (
                   <li key={i} className="flex gap-2">
                     <span className={`${theme.muted} select-none`}>{i + 1}.</span>
-                    <div>
-                      <div>{d.definition}</div>
-                      {d.example && (
-                        <div className={`text-[12px] italic mt-0.5 ${theme.muted}`}>“{d.example}”</div>
-                      )}
-                    </div>
+                    <div>{d.definition}</div>
                   </li>
                 ))}
               </ul>
             )}
           </div>
 
-          {/* Context sentence preview */}
-          <div className={`mt-3.5 p-3 rounded-xl border ${theme.border} text-[12px] leading-relaxed ${theme.muted}`}>
-            原句：{selectedSentence}
-          </div>
-
           {/* Action Row */}
-          <div className="mt-4 flex items-center gap-2 flex-wrap">
+          <div className="mt-3.5 flex items-center gap-2 flex-wrap">
             <button
               onClick={handleSaveWord}
               disabled={justSaved}
-              className={`h-10 px-4 rounded-xl text-[13px] font-medium flex items-center gap-1.5 transition-colors ${
+              className={`h-9 px-3.5 rounded-xl text-[12.5px] font-medium flex items-center gap-1.5 transition-colors ${
                 justSaved
                   ? 'bg-emerald-600/15 text-emerald-700 border border-emerald-600/30'
                   : 'bg-[#1C1B18] text-[#FAF9F6]'
@@ -596,20 +648,31 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             >
               {justSaved ? (
                 <>
-                  <BookmarkCheck className="w-4 h-4" /> 已在 FSRS 词库
+                  <BookmarkCheck className="w-4 h-4" /> 已在词库
                 </>
               ) : (
                 <>
-                  <BookmarkPlus className="w-4 h-4" /> 收藏生词（含原句）
+                  <BookmarkPlus className="w-4 h-4" /> 收藏生词
                 </>
               )}
             </button>
 
             <button
               onClick={() => handlePronounce(selectedSentence)}
-              className={`h-10 px-3.5 rounded-xl border ${theme.border} text-[13px] flex items-center gap-1.5`}
+              className={`h-9 px-3 rounded-xl border ${theme.border} text-[12.5px] flex items-center gap-1.5`}
             >
-              <Volume2 className="w-4 h-4" /> 读原句
+              <Volume2 className="w-3.5 h-3.5" /> 读原句
+            </button>
+
+            <button
+              onClick={handleLoadLinearSenseGroups}
+              className={`h-9 px-3 rounded-xl border text-[12.5px] font-medium flex items-center gap-1 ${
+                showLinearChunks
+                  ? 'bg-emerald-600/15 border-emerald-500/40 text-emerald-800 dark:text-emerald-300'
+                  : `${theme.border}`
+              }`}
+            >
+              母语者意群顺译
             </button>
 
             {aiReady && (
@@ -617,20 +680,49 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 <button
                   onClick={() => handleAiAction('word')}
                   disabled={aiLoading}
-                  className={`h-10 px-3 rounded-xl border ${theme.border} text-[12px] font-medium flex items-center gap-1`}
+                  className={`h-9 px-3 rounded-xl border ${theme.border} text-[12px] font-medium flex items-center gap-1`}
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-600" /> AI 语境精析
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" /> AI 精析
                 </button>
                 <button
                   onClick={() => handleAiAction('sentence')}
                   disabled={aiLoading}
-                  className={`h-10 px-3 rounded-xl border ${theme.border} text-[12px] font-medium flex items-center gap-1`}
+                  className={`h-9 px-3 rounded-xl border ${theme.border} text-[12px] font-medium flex items-center gap-1`}
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-600" /> 拆解长难句
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" /> AI 拆句
                 </button>
               </>
             )}
           </div>
+
+          {/* Native-Speaker Linear Sense-Group Breakdown (100% Free!) */}
+          {showLinearChunks && (
+            <div className={`mt-3.5 p-3.5 rounded-2xl border ${theme.border} space-y-2.5`}>
+              <div className={`text-[11px] font-medium ${theme.muted}`}>
+                按英文语序从上往下顺读，无需倒装回译：
+              </div>
+              {loadingLinear ? (
+                <div className={`py-2 flex items-center gap-2 text-[12px] ${theme.muted}`}>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> 正在按意群切分并顺译…
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {linearChunks.map((c, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => handlePronounce(c.text)}
+                      className={`p-2 rounded-xl border ${theme.border} cursor-pointer active:opacity-80`}
+                    >
+                      <div className="font-editorial text-[14.5px] leading-snug">{c.text}</div>
+                      {c.zh && (
+                        <div className={`text-[12.5px] mt-0.5 ${theme.muted}`}>{c.zh}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Optional AI Output */}
           {(aiLoading || aiResult || aiError) && (

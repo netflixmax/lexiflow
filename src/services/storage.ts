@@ -22,13 +22,19 @@ const KEYS = {
 export const DEFAULT_READER_SETTINGS: ReaderSettings = {
   theme: 'light',
   fontSize: 18,
-  lineHeight: 1.75,
+  lineHeight: 1.8,
   highlightSavedWords: true,
-  showBilingual: true,
-  ttsRate: 0.9,
+  showSenseGroups: true,
+  showBilingual: false,
+  ttsRate: 0.92,
   ttsAccent: 'en-US',
-  ttsVoiceMode: 'neural_online',
-  ttsVoiceName: '',
+  voice: {
+    engine: 'kokoro',
+    kokoroSpeaker: 3, // af_heart — warm, natural American female voice
+    rimeApiKey: '',
+    rimeModel: 'coda',
+    rimeSpeaker: 'astra',
+  },
 };
 
 export const DEFAULT_AI_CONFIG: AiConfig = {
@@ -177,9 +183,14 @@ export function recordActivity(
 }
 
 export function loadReaderSettings(): ReaderSettings {
+  const saved = safeParse<Partial<ReaderSettings>>(localStorage.getItem(KEYS.READER), {});
   return {
     ...DEFAULT_READER_SETTINGS,
-    ...safeParse<Partial<ReaderSettings>>(localStorage.getItem(KEYS.READER), {}),
+    ...saved,
+    voice: {
+      ...DEFAULT_READER_SETTINGS.voice,
+      ...(saved.voice ?? {}),
+    },
   };
 }
 
