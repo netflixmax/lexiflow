@@ -63,6 +63,9 @@ class LexiSpeechEngine(context: Context) : TextToSpeech.OnInitListener {
 
     @Volatile private var kokoro: OfflineTts? = null
     @Volatile private var kokoroFailed = false
+    @Volatile var lastKokoroError: String = ""
+
+    fun isKokoroReady(): Boolean = kokoro != null
 
     @Volatile private var audioTrack: AudioTrack? = null
     @Volatile private var mediaPlayer: MediaPlayer? = null
@@ -308,29 +311,43 @@ class LexiSpeechEngine(context: Context) : TextToSpeech.OnInitListener {
             val voicesFile = File(dir, "voices.bin")
             val tokensFile = File(dir, "tokens.txt")
             val lexiconFile = File(dir, "lexicon.txt")
-            if (!modelFile.exists() || !voicesFile.exists() || !tokensFile.exists() || !lexiconFile.exists()) {
+            val espeakDir = File(dir, "espeak-ng-data")
+            if (!modelFile.exists() || !voicesFile.exists() || !tokensFile.exists()) {
                 throw IllegalStateException("Kokoro model assets missing")
             }
-            val kokoroConfig = OfflineTtsKokoroModelConfig(
-                model = modelFile.absolutePath,
-                voices = voicesFile.absolutePath,
-                tokens = tokensFile.absolutePath,
-                dataDir = File(dir, "espeak-ng-data").absolutePath,
-                lexicon = lexiconFile.absolutePath
-            )
-            val modelConfig = OfflineTtsModelConfig(
-                kokoro = kokoroConfig,
-                numThreads = 2,
-                provider = "cpu"
-            )
-            val ttsConfig = OfflineTtsConfig(
-                model = modelConfig,
-                maxNumSentences = 100
-            )
-            val engine = OfflineTts(config = ttsConfig)
+
+            fun buildEngine(useLexicon: Boolean): OfflineTts {
+                val kokoroConfig = OfflineTtsKokoroModelConfig(
+                    model = modelFile.absolutePath,
+                    voices = voicesFile.absolutePath,
+                    tokens = tokensFile.absolutePath,
+                    dataDir = espeakDir.absolutePath,
+                    lexicon = if (useLexicon && lexiconFile.exists()) lexiconFile.absolutePath else ""
+                )
+                val modelConfig = OfflineTtsModelConfig(
+                    kokoro = kokoroConfig,
+                    numThreads = 2,
+                    provider = "cpu"
+                )
+                val ttsConfig = OfflineTtsConfig(
+                    model = modelConfig,
+                    maxNumSentences = 100
+                )
+                return OfflineTts(config = ttsConfig)
+            }
+
+            // English-only kokoro-en-v0_19 uses espeak-ng-data natively for natural prosody;
+            // fall back to lexicon file if needed.
+            val engine = try {
+                buildEngine(useLexicon = false)
+            } catch (_: Exception) {
+                buildEngine(useLexicon = true)
+            }
+            lastKokoroError = ""
             kokoro = engine
             engine
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            lastKokoroError = e.message ?: e.javaClass.simpleName
             kokoroFailed = true
             null
         }

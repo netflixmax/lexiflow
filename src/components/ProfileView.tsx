@@ -103,6 +103,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     getSpeechStatus().then(setSpeechStatus);
   }, []);
 
+  const totalListenSec = stats.listeningSecondsTotal ?? stats.listeningMinutes * 60;
+  const formattedListenTime =
+    totalListenSec >= 3600
+      ? `${Math.floor(totalListenSec / 3600)}h${Math.floor((totalListenSec % 3600) / 60)}m`
+      : totalListenSec >= 60
+        ? `${Math.floor(totalListenSec / 60)}分${totalListenSec % 60 > 0 ? `${totalListenSec % 60}秒` : ''}`
+        : `${totalListenSec}秒`;
+
   // Build 28-day activity heatmap
   const heatmapDays = useMemo(() => {
     const days: Array<{ key: string; score: number }> = [];
@@ -112,8 +120,19 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       d.setDate(now.getDate() - i);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       const act = stats.daily[key];
+      const listenMin = act ? (act.listeningSeconds ?? act.listeningMins * 60) / 60 : 0;
       const score = act
-        ? Math.min(4, Math.ceil((act.wordsRead / 250 + act.reviews / 8 + act.listeningMins / 5 + act.wordsMined / 3)))
+        ? Math.min(
+            4,
+            Math.ceil(
+              act.wordsRead / 250 +
+                act.reviews / 6 +
+                listenMin / 3 +
+                act.wordsMined / 2 +
+                (act.mirrorsLogged ?? 0) +
+                (act.scenariosDone ?? 0),
+            ),
+          )
         : 0;
       days.push({ key, score });
     }
@@ -276,19 +295,21 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
           <div className="grid grid-cols-4 gap-2 text-center mb-4">
             <div className="p-2 rounded-xl bg-[#FAF9F6]">
-              <div className="text-[18px] font-semibold text-[#1C1B18]">{stats.wordsReadTotal}</div>
-              <div className="text-[10px] text-[#8E8A80]">精读字数</div>
-            </div>
-            <div className="p-2 rounded-xl bg-[#FAF9F6]">
-              <div className="text-[18px] font-semibold text-[#1C1B18]">{stats.listeningMinutes}m</div>
+              <div className="text-[16px] font-semibold text-[#1C1B18]">{formattedListenTime}</div>
               <div className="text-[10px] text-[#8E8A80]">精听时长</div>
             </div>
             <div className="p-2 rounded-xl bg-[#FAF9F6]">
-              <div className="text-[18px] font-semibold text-[#1C1B18]">{vocabCount}</div>
+              <div className="text-[16px] font-semibold text-[#1C1B18]">
+                {(stats.mirrorsLoggedTotal ?? 0) + (stats.scenariosDoneTotal ?? 0)}
+              </div>
+              <div className="text-[10px] text-[#8E8A80]">镜子与真话</div>
+            </div>
+            <div className="p-2 rounded-xl bg-[#FAF9F6]">
+              <div className="text-[16px] font-semibold text-[#1C1B18]">{vocabCount}</div>
               <div className="text-[10px] text-[#8E8A80]">个人词库</div>
             </div>
             <div className="p-2 rounded-xl bg-[#FAF9F6]">
-              <div className="text-[18px] font-semibold text-[#1C1B18]">{stats.reviewsTotal}</div>
+              <div className="text-[16px] font-semibold text-[#1C1B18]">{stats.reviewsTotal}</div>
               <div className="text-[10px] text-[#8E8A80]">FSRS 复习</div>
             </div>
           </div>

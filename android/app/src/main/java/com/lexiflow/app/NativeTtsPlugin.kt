@@ -33,6 +33,8 @@ class NativeTtsPlugin : Plugin() {
     fun getStatus(call: PluginCall) {
         val ret = JSObject()
         ret.put("kokoroBundled", engine.isKokoroBundled())
+        ret.put("kokoroReady", engine.isKokoroReady())
+        ret.put("kokoroError", engine.lastKokoroError)
         ret.put("cacheBytes", engine.audioCacheSizeBytes())
         call.resolve(ret)
     }

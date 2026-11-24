@@ -24,6 +24,7 @@ import {
   loadDailyPicks,
   loadDailyScenarios,
   loadLibrary,
+  loadLiveReadme,
   loadPodcastFeeds,
   loadReaderSettings,
   loadStats,
@@ -36,6 +37,7 @@ import {
   saveDailyPicks,
   saveDailyScenarios,
   saveLibrary,
+  saveLiveReadme,
   savePodcastFeeds,
   saveReaderSettings,
   saveUpdateConfig,
@@ -49,6 +51,7 @@ import type {
   DailyMirrorCard,
   DailyPick,
   DailyScenarioCard,
+  LiveReadmeData,
   PodcastFeed,
   ReaderSettings,
   SharedIncomingPayload,
@@ -69,6 +72,7 @@ export function App() {
   const [mirrors, setMirrors] = useState<DailyMirrorCard[]>(() => loadDailyMirrors());
   const [scenarios, setScenarios] = useState<DailyScenarioCard[]>(() => loadDailyScenarios());
   const [picks, setPicks] = useState<DailyPick[]>(() => loadDailyPicks());
+  const [liveReadme, setLiveReadme] = useState<LiveReadmeData>(() => loadLiveReadme());
 
   const [readingItemId, setReadingItemId] = useState<string | null>(null);
   const [listeningArticle, setListeningArticle] = useState<ContentItem | null>(null);
@@ -147,6 +151,7 @@ export function App() {
       mirrors: DailyMirrorCard[];
       scenarios: DailyScenarioCard[];
       picks?: DailyPick[];
+      readme?: LiveReadmeData;
     }) => {
       if (res.articles.length > 0) handleAddItems(res.articles);
       if (res.mirrors.length > 0) {
@@ -168,6 +173,10 @@ export function App() {
       if (res.picks && res.picks.length > 0) {
         setPicks(res.picks);
         saveDailyPicks(res.picks);
+      }
+      if (res.readme && Array.isArray(res.readme.sections) && res.readme.sections.length > 0) {
+        setLiveReadme(res.readme);
+        saveLiveReadme(res.readme);
       }
     },
     [handleAddItems],
@@ -203,6 +212,7 @@ export function App() {
         mirrors: parsed.mirrors,
         scenarios: parsed.scenarios,
         picks: parsed.picks,
+        readme: parsed.readme,
       });
       if (parsed.mirrors.length > 0 || parsed.picks.length > 0) {
         setTab('today');
@@ -331,6 +341,7 @@ export function App() {
     setMirrors(loadDailyMirrors());
     setScenarios(loadDailyScenarios());
     setPicks(loadDailyPicks());
+    setLiveReadme(loadLiveReadme());
   };
 
   const showClassic = Boolean(readerSettings.showClassicTabs);
@@ -386,7 +397,15 @@ export function App() {
             onMineWord={handleMineWord}
             onOpenArticle={(item) => setReadingItemId(item.id)}
             onOpenReadme={() => setShowReadme(true)}
-            onRecordListening={(mins) => setStats((prev) => recordActivity(prev, { listeningMins: mins }))}
+            onRecordListeningSeconds={(secs) =>
+              setStats((prev) => recordActivity(prev, { listeningSeconds: secs }))
+            }
+            onRecordScenarioDone={() =>
+              setStats((prev) => recordActivity(prev, { scenariosDone: 1 }))
+            }
+            onRecordMirrorEcho={() =>
+              setStats((prev) => recordActivity(prev, { mirrorsLogged: 1 }))
+            }
           />
         )}
         {tab === 'read' && showClassic && (
@@ -487,10 +506,11 @@ export function App() {
       {/* Living Built-in README Modal */}
       {showReadme && (
         <ReadmeModal
+          readme={liveReadme}
           onClose={() => setShowReadme(false)}
           onTriggerImport={() => {
             setTab('today');
-            setShareToast('点击右上角「导入日包」，选择 Drive 中 03_outbox/daily-feed/ 的今日 JSON 即可热更新');
+            setShareToast('点击右上角「日包」，选择 Drive 中 03_outbox/daily-feed/ 的今日 JSON 即可实时更新');
             setTimeout(() => setShareToast(null), 4000);
           }}
         />

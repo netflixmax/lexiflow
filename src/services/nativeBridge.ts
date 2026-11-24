@@ -2,21 +2,22 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import type { PluginListenerHandle } from '@capacitor/core';
 import type { SharedIncomingPayload, VoiceConfig } from '../types';
 
-export const APP_VERSION_NAME = '1.4.0';
-export const APP_VERSION_CODE = 10400;
+export const APP_VERSION_NAME = '1.5.0';
+export const APP_VERSION_CODE = 10500;
 
+// Exact speaker IDs for kokoro-int8-en-v0_19 (11 English neural voices)
 export const KOKORO_SPEAKERS: Array<{ id: number; name: string; desc: string }> = [
-  { id: 3, name: 'Heart', desc: '美式温暖女声 · 推荐' },
-  { id: 2, name: 'Bella', desc: '美式自然女声' },
-  { id: 0, name: 'Alloy', desc: '美式清晰中性' },
-  { id: 1, name: 'Aoede', desc: '美式柔和叙事' },
-  { id: 4, name: 'Jessica', desc: '美式知性女声' },
-  { id: 5, name: 'Kore', desc: '美式明亮清晰' },
-  { id: 6, name: 'Nicole', desc: '美式轻柔耳语' },
-  { id: 7, name: 'Nova', desc: '美式清澈播客' },
-  { id: 8, name: 'River', desc: '美式沉稳中性' },
-  { id: 9, name: 'Sarah', desc: '美式新闻质感' },
-  { id: 10, name: 'Sky', desc: '美式轻快活力' },
+  { id: 1, name: 'Bella', desc: '美式自然女声 · 温暖顺耳' },
+  { id: 3, name: 'Sarah', desc: '美式新闻女声 · 清晰克制' },
+  { id: 4, name: 'Sky', desc: '美式轻快女声 · 活力播客' },
+  { id: 2, name: 'Nicole', desc: '美式轻柔女声 · 夜间耳语' },
+  { id: 0, name: 'Default AF', desc: '美式标准女声 · 均衡' },
+  { id: 5, name: 'Adam', desc: '美式沉稳男声 · 播客推荐' },
+  { id: 6, name: 'Michael', desc: '美式磁性男声 · 叙事感强' },
+  { id: 7, name: 'Emma', desc: '英式优雅女声 · 推荐' },
+  { id: 8, name: 'Isabella', desc: '英式知性女声' },
+  { id: 9, name: 'George', desc: '英式绅士男声 · 深度对谈' },
+  { id: 10, name: 'Lewis', desc: '英式清朗男声' },
 ];
 
 interface NativeTtsPluginInterface {
@@ -27,7 +28,12 @@ interface NativeTtsPluginInterface {
     rimeModel: string;
     rimeSpeaker: string;
   }): Promise<void>;
-  getStatus(): Promise<{ kokoroBundled: boolean; cacheBytes: number }>;
+  getStatus(): Promise<{
+    kokoroBundled: boolean;
+    kokoroReady?: boolean;
+    kokoroError?: string;
+    cacheBytes: number;
+  }>;
   fetchRimeVoices(options: { model: string }): Promise<{ voices: string[] }>;
   clearCache(): Promise<{ cleared: boolean }>;
   speak(options: { text: string; rate?: number; utteranceId?: string }): Promise<{ utteranceId: string }>;
@@ -97,14 +103,19 @@ export async function configureSpeechEngine(voice: VoiceConfig): Promise<void> {
   }
 }
 
-export async function getSpeechStatus(): Promise<{ kokoroBundled: boolean; cacheBytes: number }> {
+export async function getSpeechStatus(): Promise<{
+  kokoroBundled: boolean;
+  kokoroReady?: boolean;
+  kokoroError?: string;
+  cacheBytes: number;
+}> {
   if (!isNativeAndroid()) {
-    return { kokoroBundled: false, cacheBytes: 0 };
+    return { kokoroBundled: false, kokoroReady: false, cacheBytes: 0 };
   }
   try {
     return await NativeTtsPlugin.getStatus();
   } catch {
-    return { kokoroBundled: false, cacheBytes: 0 };
+    return { kokoroBundled: false, kokoroReady: false, cacheBytes: 0 };
   }
 }
 

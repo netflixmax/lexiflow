@@ -4,6 +4,7 @@ import type {
   DailyMirrorCard,
   DailyPick,
   DailyScenarioCard,
+  LiveReadmeData,
 } from '../types';
 
 /**
@@ -23,6 +24,7 @@ export interface DailyImportResult {
   mirrors: DailyMirrorCard[];
   scenarios: DailyScenarioCard[];
   picks: DailyPick[];
+  readme?: LiveReadmeData;
   summary: string;
 }
 
@@ -47,12 +49,21 @@ export function parseIncrementalDailyContent(
       const podcastItem = obj.podcast ?? obj.article;
       const articles = podcastItem ? [podcastItem] : [];
       const picks = Array.isArray(obj.picks) ? obj.picks : [];
+      const readme = obj.readme;
+      const parts = [
+        mirrors.length ? `${mirrors.length} 镜子` : '',
+        articles.length ? `${articles.length} 播客` : '',
+        scenarios.length ? `${scenarios.length} 真话` : '',
+        picks.length ? `${picks.length} 推送` : '',
+        readme ? 'README 已更新' : '',
+      ].filter(Boolean);
       return {
         articles,
         mirrors,
         scenarios,
         picks,
-        summary: `已热更新 ${obj.date || today} 日包：${mirrors.length} 张镜子 · ${articles.length} 期播客 · ${scenarios.length} 句真话 · ${picks.length} 条推送`,
+        readme,
+        summary: `已热更新 ${obj.date || today} 日包：${parts.join(' · ')}`,
       };
     } catch {
       // fall through to Markdown parsing

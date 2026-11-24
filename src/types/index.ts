@@ -100,13 +100,19 @@ export interface DailyActivity {
   wordsRead: number;
   reviews: number;
   listeningMins: number;
+  listeningSeconds?: number;
   wordsMined: number;
+  mirrorsLogged?: number;
+  scenariosDone?: number;
 }
 
 export interface UserStats {
   wordsReadTotal: number;
   listeningMinutes: number;
+  listeningSecondsTotal?: number;
   reviewsTotal: number;
+  mirrorsLoggedTotal?: number;
+  scenariosDoneTotal?: number;
   daily: Record<string, DailyActivity>; // YYYY-MM-DD
 }
 
@@ -167,12 +173,24 @@ export interface DailyPick {
   url?: string;
 }
 
+export interface LiveReadmeSection {
+  title: string;
+  body: string;
+}
+
+export interface LiveReadmeData {
+  updatedAt: string;
+  subtitle: string;
+  sections: LiveReadmeSection[];
+}
+
 export interface DailyFeedBundle {
   date: string;
   mirror?: DailyMirrorCard;
   podcast?: ContentItem;
   scenarios?: DailyScenarioCard[];
   picks?: DailyPick[];
+  readme?: LiveReadmeData;
 }
 
 export interface DailyFeedConfig {
