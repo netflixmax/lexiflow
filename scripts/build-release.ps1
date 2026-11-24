@@ -20,6 +20,9 @@ Write-Host "3/3 Assembling signed release APK..." -ForegroundColor Cyan
 Push-Location android
 try {
     .\gradlew.bat --init-script mirror.init.gradle assembleRelease --no-daemon
+    if ($LASTEXITCODE -ne 0) {
+        throw "Gradle assembleRelease failed with exit code $LASTEXITCODE"
+    }
 } finally {
     Pop-Location
 }

@@ -1,9 +1,9 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import type { PluginListenerHandle } from '@capacitor/core';
-import type { VoiceConfig } from '../types';
+import type { SharedIncomingPayload, VoiceConfig } from '../types';
 
-export const APP_VERSION_NAME = '1.2.0';
-export const APP_VERSION_CODE = 10200;
+export const APP_VERSION_NAME = '1.3.0';
+export const APP_VERSION_CODE = 10300;
 
 export const KOKORO_SPEAKERS: Array<{ id: number; name: string; desc: string }> = [
   { id: 3, name: 'Heart', desc: '美式温暖女声 · 推荐' },
@@ -53,8 +53,17 @@ interface AppUpdaterPluginInterface {
   ): Promise<PluginListenerHandle>;
 }
 
+interface ShareReceiverPluginInterface {
+  consumePendingShare(): Promise<{ hasPayload: boolean; payload?: SharedIncomingPayload }>;
+  addListener(
+    eventName: 'shareReceived',
+    listenerFunc: (payload: SharedIncomingPayload) => void,
+  ): Promise<PluginListenerHandle>;
+}
+
 const NativeTtsPlugin = registerPlugin<NativeTtsPluginInterface>('NativeTts');
 const AppUpdaterPlugin = registerPlugin<AppUpdaterPluginInterface>('AppUpdater');
+const ShareReceiverPlugin = registerPlugin<ShareReceiverPluginInterface>('ShareReceiver');
 
 export const isNativeAndroid = (): boolean =>
   Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
@@ -279,5 +288,29 @@ export async function downloadAndInstallApk(
   } catch (err) {
     handle?.remove();
     throw err;
+  }
+}
+
+export async function consumePendingShare(): Promise<SharedIncomingPayload | null> {
+  if (!isNativeAndroid()) return null;
+  try {
+    const res = await ShareReceiverPlugin.consumePendingShare();
+    return res.hasPayload && res.payload ? res.payload : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function subscribeIncomingShare(
+  onReceive: (payload: SharedIncomingPayload) => void,
+): Promise<() => void> {
+  if (!isNativeAndroid()) return () => {};
+  try {
+    const handle = await ShareReceiverPlugin.addListener('shareReceived', onReceive);
+    return () => {
+      handle.remove().catch(() => {});
+    };
+  } catch {
+    return () => {};
   }
 }

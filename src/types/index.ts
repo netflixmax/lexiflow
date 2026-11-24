@@ -134,4 +134,35 @@ export interface ReaderSettings {
   voice: VoiceConfig;
 }
 
-export type ActiveTab = 'read' | 'listen' | 'vocab' | 'profile';
+export interface DailyMirrorCard {
+  id: string;
+  date: string;
+  title: string;
+  summary: string;
+  highlights: string[];
+  mirrorQuestion: string;
+  userReflection?: string;
+}
+
+export interface DailyScenarioCard {
+  id: string;
+  date: string;
+  sceneTag: string;
+  zhOriginal: string;
+  userAttempt?: string;
+  tip?: string;
+  enSenseGroups: string[];
+  enNatural: string;
+  keyPhrase?: string;
+  domain: '思想表达' | '分享产品' | 'AI 洞察' | '下达意图' | '体验反馈' | '日常交流';
+  status: 'pending' | 'learning' | 'mastered';
+}
+
+export interface SharedIncomingPayload {
+  action: 'word' | 'text';
+  text: string;
+  context?: string;
+  source?: string;
+}
+
+export type ActiveTab = 'today' | 'read' | 'listen' | 'vocab' | 'profile';

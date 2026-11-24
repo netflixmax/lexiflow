@@ -1,7 +1,14 @@
 import { CURATED_LIBRARY, CURATED_PODCASTS } from '../data/curatedLibrary';
+import {
+  SEED_DAILY_MIRROR,
+  SEED_DAILY_SCENARIOS,
+  SEED_PERSONAL_ARTICLE,
+} from '../data/dailySeed';
 import type {
   AiConfig,
   ContentItem,
+  DailyMirrorCard,
+  DailyScenarioCard,
   PodcastFeed,
   ReaderSettings,
   UpdateConfig,
@@ -17,6 +24,8 @@ const KEYS = {
   UPDATE_CONFIG: 'lexiflow_update_config_v1',
   STATS: 'lexiflow_stats_v1',
   READER: 'lexiflow_reader_settings_v1',
+  DAILY_MIRRORS: 'lexiflow_daily_mirrors_v1',
+  DAILY_SCENARIOS: 'lexiflow_daily_scenarios_v1',
 };
 
 export const DEFAULT_READER_SETTINGS: ReaderSettings = {
@@ -75,16 +84,18 @@ export function getTodayKey(): string {
 }
 
 export function loadLibrary(): ContentItem[] {
+  const baseSeed: ContentItem[] = [SEED_PERSONAL_ARTICLE, ...CURATED_LIBRARY];
   const saved = safeParse<ContentItem[]>(localStorage.getItem(KEYS.LIBRARY), []);
   if (saved.length === 0) {
-    saveLibrary(CURATED_LIBRARY);
-    return CURATED_LIBRARY;
+    saveLibrary(baseSeed);
+    return baseSeed;
   }
-  // Ensure curated items exist without overwriting user progress
+  // Ensure personal seed & curated items exist without overwriting user progress
   const existingIds = new Set(saved.map((i) => i.id));
-  const missing = CURATED_LIBRARY.filter((c) => !existingIds.has(c.id));
-  if (missing.length > 0) {
-    const merged = [...saved, ...missing];
+  const missingPersonal = existingIds.has(SEED_PERSONAL_ARTICLE.id) ? [] : [SEED_PERSONAL_ARTICLE];
+  const missingCurated = CURATED_LIBRARY.filter((c) => !existingIds.has(c.id));
+  if (missingPersonal.length > 0 || missingCurated.length > 0) {
+    const merged = [...missingPersonal, ...saved, ...missingCurated];
     saveLibrary(merged);
     return merged;
   }
@@ -196,6 +207,32 @@ export function loadReaderSettings(): ReaderSettings {
 
 export function saveReaderSettings(settings: ReaderSettings): void {
   localStorage.setItem(KEYS.READER, JSON.stringify(settings));
+}
+
+export function loadDailyMirrors(): DailyMirrorCard[] {
+  const saved = safeParse<DailyMirrorCard[]>(localStorage.getItem(KEYS.DAILY_MIRRORS), []);
+  if (saved.length === 0) {
+    saveDailyMirrors([SEED_DAILY_MIRROR]);
+    return [SEED_DAILY_MIRROR];
+  }
+  return saved;
+}
+
+export function saveDailyMirrors(mirrors: DailyMirrorCard[]): void {
+  localStorage.setItem(KEYS.DAILY_MIRRORS, JSON.stringify(mirrors));
+}
+
+export function loadDailyScenarios(): DailyScenarioCard[] {
+  const saved = safeParse<DailyScenarioCard[]>(localStorage.getItem(KEYS.DAILY_SCENARIOS), []);
+  if (saved.length === 0) {
+    saveDailyScenarios(SEED_DAILY_SCENARIOS);
+    return SEED_DAILY_SCENARIOS;
+  }
+  return saved;
+}
+
+export function saveDailyScenarios(scenarios: DailyScenarioCard[]): void {
+  localStorage.setItem(KEYS.DAILY_SCENARIOS, JSON.stringify(scenarios));
 }
 
 export function exportAllDataJson(): string {

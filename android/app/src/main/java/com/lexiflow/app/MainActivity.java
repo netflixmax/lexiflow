@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(NativeTtsPlugin.class);
         registerPlugin(AppUpdaterPlugin.class);
+        registerPlugin(ShareReceiverPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
