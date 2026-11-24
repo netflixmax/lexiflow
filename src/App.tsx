@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookOpen, Brain, Headphones, Sparkles, User } from 'lucide-react';
+import { BookOpen, Brain, Headphones, Settings, Sparkles } from 'lucide-react';
 import type { Grade } from 'ts-fsrs';
 import { LibraryView } from './components/LibraryView';
 import { ListenView } from './components/ListenView';
 import { ProfileView } from './components/ProfileView';
 import { ReaderView } from './components/ReaderView';
+import { ReadmeModal } from './components/ReadmeModal';
 import { TodayView } from './components/TodayView';
 import { VocabView } from './components/VocabView';
 import { STARTER_WORDS } from './data/starterDecks';
@@ -18,7 +19,9 @@ import {
 } from './services/nativeBridge';
 import {
   loadAiConfig,
+  loadDailyFeedConfig,
   loadDailyMirrors,
+  loadDailyPicks,
   loadDailyScenarios,
   loadLibrary,
   loadPodcastFeeds,
@@ -28,7 +31,9 @@ import {
   loadVocab,
   recordActivity,
   saveAiConfig,
+  saveDailyFeedConfig,
   saveDailyMirrors,
+  saveDailyPicks,
   saveDailyScenarios,
   saveLibrary,
   savePodcastFeeds,
@@ -40,7 +45,9 @@ import type {
   ActiveTab,
   AiConfig,
   ContentItem,
+  DailyFeedConfig,
   DailyMirrorCard,
+  DailyPick,
   DailyScenarioCard,
   PodcastFeed,
   ReaderSettings,
@@ -56,18 +63,27 @@ export function App() {
   const [podcasts, setPodcasts] = useState<PodcastFeed[]>(() => loadPodcastFeeds());
   const [aiConfig, setAiConfig] = useState<AiConfig>(() => loadAiConfig());
   const [updateConfig, setUpdateConfig] = useState<UpdateConfig>(() => loadUpdateConfig());
+  const [feedConfig, setFeedConfig] = useState<DailyFeedConfig>(() => loadDailyFeedConfig());
   const [stats, setStats] = useState(() => loadStats());
   const [readerSettings, setReaderSettings] = useState<ReaderSettings>(() => loadReaderSettings());
   const [mirrors, setMirrors] = useState<DailyMirrorCard[]>(() => loadDailyMirrors());
   const [scenarios, setScenarios] = useState<DailyScenarioCard[]>(() => loadDailyScenarios());
+  const [picks, setPicks] = useState<DailyPick[]>(() => loadDailyPicks());
 
   const [readingItemId, setReadingItemId] = useState<string | null>(null);
   const [listeningArticle, setListeningArticle] = useState<ContentItem | null>(null);
   const [shareToast, setShareToast] = useState<string | null>(null);
+  const [showReadme, setShowReadme] = useState(false);
 
   useEffect(() => {
     configureSpeechEngine(readerSettings.voice);
   }, [readerSettings.voice]);
+
+  useEffect(() => {
+    if (!readerSettings.showClassicTabs && (tab === 'read' || tab === 'listen')) {
+      setTab('today');
+    }
+  }, [readerSettings.showClassicTabs, tab]);
 
   const readingItem = useMemo(
     () => library.find((i) => i.id === readingItemId) ?? null,
@@ -130,6 +146,7 @@ export function App() {
       articles: ContentItem[];
       mirrors: DailyMirrorCard[];
       scenarios: DailyScenarioCard[];
+      picks?: DailyPick[];
     }) => {
       if (res.articles.length > 0) handleAddItems(res.articles);
       if (res.mirrors.length > 0) {
@@ -147,6 +164,10 @@ export function App() {
           saveDailyScenarios(merged);
           return merged;
         });
+      }
+      if (res.picks && res.picks.length > 0) {
+        setPicks(res.picks);
+        saveDailyPicks(res.picks);
       }
     },
     [handleAddItems],
@@ -171,7 +192,7 @@ export function App() {
           sourceTitle: payload.source === 'keyboard' ? '语音键盘采集' : '系统分享采集',
           deck: '外部采集',
         });
-        setShareToast(`已增量收词到 FSRS：「${entry?.word || text}」`);
+        setShareToast(`已增量收词到复习：「${entry?.word || text}」`);
         setTimeout(() => setShareToast(null), 3500);
         return;
       }
@@ -181,8 +202,11 @@ export function App() {
         articles: parsed.articles,
         mirrors: parsed.mirrors,
         scenarios: parsed.scenarios,
+        picks: parsed.picks,
       });
-      if (parsed.articles.length > 0) {
+      if (parsed.mirrors.length > 0 || parsed.picks.length > 0) {
+        setTab('today');
+      } else if (parsed.articles.length > 0) {
         setReadingItemId(parsed.articles[0].id);
       } else {
         setTab('today');
@@ -283,6 +307,11 @@ export function App() {
     saveUpdateConfig(next);
   };
 
+  const handleUpdateFeedConfig = (next: DailyFeedConfig) => {
+    setFeedConfig(next);
+    saveDailyFeedConfig(next);
+  };
+
   const handleAddPodcast = (feed: PodcastFeed) => {
     setPodcasts((prev) => {
       const next = [feed, ...prev];
@@ -298,17 +327,38 @@ export function App() {
     setStats(loadStats());
     setReaderSettings(loadReaderSettings());
     setUpdateConfig(loadUpdateConfig());
+    setFeedConfig(loadDailyFeedConfig());
     setMirrors(loadDailyMirrors());
     setScenarios(loadDailyScenarios());
+    setPicks(loadDailyPicks());
   };
 
-  const navItems: Array<{ key: ActiveTab; label: string; icon: React.ReactNode; badge?: number }> = [
-    { key: 'today', label: '今日', icon: <Sparkles className="w-5 h-5" /> },
-    { key: 'read', label: '阅读', icon: <BookOpen className="w-5 h-5" /> },
-    { key: 'listen', label: '精听', icon: <Headphones className="w-5 h-5" /> },
-    { key: 'vocab', label: '词库', icon: <Brain className="w-5 h-5" />, badge: dueCount > 0 ? dueCount : undefined },
-    { key: 'profile', label: '我的', icon: <User className="w-5 h-5" /> },
-  ];
+  const showClassic = Boolean(readerSettings.showClassicTabs);
+
+  const navItems: Array<{ key: ActiveTab; label: string; icon: React.ReactNode; badge?: number }> =
+    showClassic
+      ? [
+          { key: 'today', label: '今日', icon: <Sparkles className="w-5 h-5" /> },
+          { key: 'read', label: '阅读', icon: <BookOpen className="w-5 h-5" /> },
+          { key: 'listen', label: '精听', icon: <Headphones className="w-5 h-5" /> },
+          {
+            key: 'vocab',
+            label: '复习',
+            icon: <Brain className="w-5 h-5" />,
+            badge: dueCount > 0 ? dueCount : undefined,
+          },
+          { key: 'profile', label: '设置', icon: <Settings className="w-5 h-5" /> },
+        ]
+      : [
+          { key: 'today', label: '今日', icon: <Sparkles className="w-5 h-5" /> },
+          {
+            key: 'vocab',
+            label: '复习',
+            icon: <Brain className="w-5 h-5" />,
+            badge: dueCount > 0 ? dueCount : undefined,
+          },
+          { key: 'profile', label: '设置', icon: <Settings className="w-5 h-5" /> },
+        ];
 
   return (
     <div className="h-full w-full flex flex-col bg-[#FAF9F6] overflow-hidden">
@@ -323,21 +373,23 @@ export function App() {
           <TodayView
             mirrors={mirrors}
             scenarios={scenarios}
+            picks={picks}
             library={library}
             savedWordSet={savedWordSet}
             readerSettings={readerSettings}
+            feedConfig={feedConfig}
+            onUpdateSettings={handleUpdateSettings}
             onUpdateMirror={handleUpdateMirror}
             onUpdateScenario={handleUpdateScenario}
             onImportDaily={handleImportDaily}
+            onUpdateFeedSynced={(iso) => handleUpdateFeedConfig({ ...feedConfig, lastSyncedAt: iso })}
             onMineWord={handleMineWord}
             onOpenArticle={(item) => setReadingItemId(item.id)}
-            onSendToListen={(item) => {
-              setListeningArticle(item);
-              setTab('listen');
-            }}
+            onOpenReadme={() => setShowReadme(true)}
+            onRecordListening={(mins) => setStats((prev) => recordActivity(prev, { listeningMins: mins }))}
           />
         )}
-        {tab === 'read' && (
+        {tab === 'read' && showClassic && (
           <LibraryView
             items={library}
             onSelect={(item) => setReadingItemId(item.id)}
@@ -345,7 +397,7 @@ export function App() {
             onDeleteItem={handleDeleteItem}
           />
         )}
-        {tab === 'listen' && (
+        {tab === 'listen' && showClassic && (
           <ListenView
             library={library}
             activeArticle={listeningArticle}
@@ -370,18 +422,21 @@ export function App() {
             vocabCount={vocab.length}
             aiConfig={aiConfig}
             updateConfig={updateConfig}
+            feedConfig={feedConfig}
             readerSettings={readerSettings}
             onUpdateReaderSettings={handleUpdateSettings}
             onUpdateAiConfig={handleUpdateAiConfig}
             onUpdateUpdateConfig={handleUpdateUpdateConfig}
+            onUpdateFeedConfig={handleUpdateFeedConfig}
+            onOpenReadme={() => setShowReadme(true)}
             onDataImported={handleReloadAll}
           />
         )}
       </main>
 
-      {/* Minimalist Bottom Navigation */}
+      {/* Radical Minimalist Bottom Navigation (3 tabs by default) */}
       <nav className="fixed inset-x-0 bottom-0 z-30 bg-[#FAF9F6]/95 backdrop-blur-md border-t border-[#ECEAE4] pb-safe">
-        <div className="max-w-lg mx-auto grid grid-cols-5 h-15">
+        <div className={`max-w-lg mx-auto grid h-15 ${showClassic ? 'grid-cols-5' : 'grid-cols-3'}`}>
           {navItems.map((n) => {
             const active = tab === n.key;
             return (
@@ -423,9 +478,21 @@ export function App() {
           onSendToListen={(item) => {
             setListeningArticle(item);
             setReadingItemId(null);
-            setTab('listen');
+            setTab(showClassic ? 'listen' : 'today');
           }}
           onBack={() => setReadingItemId(null)}
+        />
+      )}
+
+      {/* Living Built-in README Modal */}
+      {showReadme && (
+        <ReadmeModal
+          onClose={() => setShowReadme(false)}
+          onTriggerImport={() => {
+            setTab('today');
+            setShareToast('点击右上角「导入日包」，选择 Drive 中 03_outbox/daily-feed/ 的今日 JSON 即可热更新');
+            setTimeout(() => setShareToast(null), 4000);
+          }}
         />
       )}
     </div>

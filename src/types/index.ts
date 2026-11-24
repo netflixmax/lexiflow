@@ -132,6 +132,7 @@ export interface ReaderSettings {
   ttsRate: number; // 0.6..1.6
   ttsAccent: 'en-US' | 'en-GB';
   voice: VoiceConfig;
+  showClassicTabs?: boolean;
 }
 
 export interface DailyMirrorCard {
@@ -156,6 +157,27 @@ export interface DailyScenarioCard {
   keyPhrase?: string;
   domain: '思想表达' | '分享产品' | 'AI 洞察' | '下达意图' | '体验反馈' | '日常交流';
   status: 'pending' | 'learning' | 'mastered';
+}
+
+export interface DailyPick {
+  id: string;
+  tag: string;
+  title: string;
+  reason: string;
+  url?: string;
+}
+
+export interface DailyFeedBundle {
+  date: string;
+  mirror?: DailyMirrorCard;
+  podcast?: ContentItem;
+  scenarios?: DailyScenarioCard[];
+  picks?: DailyPick[];
+}
+
+export interface DailyFeedConfig {
+  feedUrl: string;
+  lastSyncedAt?: string;
 }
 
 export interface SharedIncomingPayload {

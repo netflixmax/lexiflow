@@ -2,8 +2,8 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import type { PluginListenerHandle } from '@capacitor/core';
 import type { SharedIncomingPayload, VoiceConfig } from '../types';
 
-export const APP_VERSION_NAME = '1.3.0';
-export const APP_VERSION_CODE = 10300;
+export const APP_VERSION_NAME = '1.4.0';
+export const APP_VERSION_CODE = 10400;
 
 export const KOKORO_SPEAKERS: Array<{ id: number; name: string; desc: string }> = [
   { id: 3, name: 'Heart', desc: '美式温暖女声 · 推荐' },

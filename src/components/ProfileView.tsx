@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  BookOpen,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -7,6 +8,7 @@ import {
   Loader2,
   RefreshCw,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   Upload,
   Volume2,
@@ -24,17 +26,28 @@ import {
 } from '../services/nativeBridge';
 import { exportAllDataJson, importAllDataJson } from '../services/storage';
 import { checkForAppUpdate } from '../services/updater';
-import type { AiConfig, AiProvider, ReaderSettings, UpdateConfig, UpdateInfo, UserStats } from '../types';
+import type {
+  AiConfig,
+  AiProvider,
+  DailyFeedConfig,
+  ReaderSettings,
+  UpdateConfig,
+  UpdateInfo,
+  UserStats,
+} from '../types';
 
 interface ProfileViewProps {
   stats: UserStats;
   vocabCount: number;
   aiConfig: AiConfig;
   updateConfig: UpdateConfig;
+  feedConfig: DailyFeedConfig;
   readerSettings: ReaderSettings;
   onUpdateReaderSettings: (next: ReaderSettings) => void;
   onUpdateAiConfig: (next: AiConfig) => void;
   onUpdateUpdateConfig: (next: UpdateConfig) => void;
+  onUpdateFeedConfig: (next: DailyFeedConfig) => void;
+  onOpenReadme: () => void;
   onDataImported: () => void;
 }
 
@@ -43,10 +56,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   vocabCount,
   aiConfig,
   updateConfig,
+  feedConfig,
   readerSettings,
   onUpdateReaderSettings,
   onUpdateAiConfig,
   onUpdateUpdateConfig,
+  onUpdateFeedConfig,
+  onOpenReadme,
   onDataImported,
 }) => {
   const [appVer, setAppVer] = useState({ versionName: APP_VERSION_NAME, versionCode: APP_VERSION_CODE });
@@ -192,12 +208,65 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-[#FAF9F6]">
-      <header className="pt-safe px-5 pb-3 bg-[#FAF9F6] border-b border-[#ECEAE4]">
-        <h1 className="text-[22px] font-semibold tracking-tight text-[#1C1B18]">成长与设置</h1>
-        <p className="text-[12px] text-[#78756E] mt-0.5">能力复利 · 应用更新 · 可选 AI 助教</p>
+      <header className="pt-safe px-5 pb-3 bg-[#FAF9F6] border-b border-[#ECEAE4] flex items-center justify-between">
+        <div>
+          <h1 className="text-[22px] font-semibold tracking-tight text-[#1C1B18]">设置</h1>
+          <p className="text-[12px] text-[#78756E] mt-0.5">极简底座 · 每日推送 · 应用更新</p>
+        </div>
+        <button
+          onClick={onOpenReadme}
+          className="h-8 px-3 rounded-xl bg-white border border-[#E5E2DA] text-[12px] font-medium text-[#1C1B18] flex items-center gap-1.5"
+        >
+          <BookOpen className="w-3.5 h-3.5 text-amber-600" /> README
+        </button>
       </header>
 
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 pb-24">
+        {/* Minimalism & Daily Feed Control */}
+        <section className="bg-white rounded-2xl p-4 border border-[#ECEAE4] space-y-3">
+          <div className="flex items-center gap-1.5 text-[14px] font-semibold text-[#1C1B18]">
+            <SlidersHorizontal className="w-4 h-4 text-amber-600" /> 极简模式与每日推送
+          </div>
+
+          <label className="flex items-center justify-between gap-3 text-[13px] text-[#1C1B18]">
+            <div>
+              <div>显示旧版「阅读书架 / 外部播客」标签</div>
+              <div className="text-[11px] text-[#8E8A80]">
+                默认关闭以保持极简，仅保留「今日 · 复习 · 设置」
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={Boolean(readerSettings.showClassicTabs)}
+              onChange={(e) =>
+                onUpdateReaderSettings({
+                  ...readerSettings,
+                  showClassicTabs: e.target.checked,
+                })
+              }
+              className="w-4 h-4 accent-[#1C1B18] shrink-0"
+            />
+          </label>
+
+          <div className="pt-2 border-t border-[#F1EFEA] space-y-1.5">
+            <label className="text-[11px] text-[#78756E] block">
+              私有每日日包同步链接（可选，填好后首页点「同步」即可热更新今日镜子与播客）
+            </label>
+            <input
+              type="url"
+              value={feedConfig.feedUrl}
+              onChange={(e) => onUpdateFeedConfig({ ...feedConfig, feedUrl: e.target.value })}
+              placeholder="https://... 或留空直接点首页「导入日包」"
+              className="w-full h-9 px-3 rounded-lg bg-[#FAF9F6] border border-[#E5E2DA] text-[12.5px]"
+            />
+            {feedConfig.lastSyncedAt && (
+              <div className="text-[11px] text-[#8E8A80]">
+                上次在线同步：{new Date(feedConfig.lastSyncedAt).toLocaleString()}
+              </div>
+            )}
+          </div>
+        </section>
+
         {/* Long-term Capability Metrics */}
         <section className="bg-white rounded-2xl p-4 border border-[#ECEAE4]">
           <div className="flex items-center justify-between mb-3">

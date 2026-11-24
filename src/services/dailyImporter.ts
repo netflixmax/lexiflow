@@ -1,4 +1,10 @@
-import type { ContentItem, DailyMirrorCard, DailyScenarioCard } from '../types';
+import type {
+  ContentItem,
+  DailyFeedBundle,
+  DailyMirrorCard,
+  DailyPick,
+  DailyScenarioCard,
+} from '../types';
 
 /**
  * Strip potential high-entropy secrets, emails, and phone/WeChat identifiers
@@ -16,12 +22,14 @@ export interface DailyImportResult {
   articles: ContentItem[];
   mirrors: DailyMirrorCard[];
   scenarios: DailyScenarioCard[];
+  picks: DailyPick[];
   summary: string;
 }
 
 /**
- * Incrementally parse a Drive daily-english pack (.md), daily-mirror card (.md),
- * or JSON daily bundle without wiping existing user data.
+ * Incrementally parse a Drive daily-feed JSON bundle (YYYY-MM-DD.json),
+ * daily-english pack (.md), daily-mirror card (.md), or plain English text
+ * without wiping existing user data.
  */
 export function parseIncrementalDailyContent(
   rawText: string,
@@ -30,22 +38,21 @@ export function parseIncrementalDailyContent(
   const clean = sanitizePersonalText(rawText).trim();
   const today = new Date().toISOString().slice(0, 10);
 
-  // 1. JSON bundle format
+  // 1. Structured DailyFeedBundle JSON format
   if (clean.startsWith('{')) {
     try {
-      const obj = JSON.parse(clean) as {
-        mirror?: DailyMirrorCard;
-        scenarios?: DailyScenarioCard[];
-        article?: ContentItem;
-      };
+      const obj = JSON.parse(clean) as DailyFeedBundle & { article?: ContentItem };
       const mirrors = obj.mirror ? [obj.mirror] : [];
       const scenarios = Array.isArray(obj.scenarios) ? obj.scenarios : [];
-      const articles = obj.article ? [obj.article] : [];
+      const podcastItem = obj.podcast ?? obj.article;
+      const articles = podcastItem ? [podcastItem] : [];
+      const picks = Array.isArray(obj.picks) ? obj.picks : [];
       return {
         articles,
         mirrors,
         scenarios,
-        summary: `增量导入 ${articles.length} 篇阅读、${scenarios.length} 张场景卡、${mirrors.length} 张复盘镜子`,
+        picks,
+        summary: `已热更新 ${obj.date || today} 日包：${mirrors.length} 张镜子 · ${articles.length} 期播客 · ${scenarios.length} 句真话 · ${picks.length} 条推送`,
       };
     } catch {
       // fall through to Markdown parsing
@@ -62,8 +69,10 @@ export function parseIncrementalDailyContent(
       .map((l) => l.replace(/^[-*\d.]+\s+/, '').replace(/\*\*/g, ''))
       .slice(0, 4);
     const questionLine =
-      lines.find((l) => l.includes('？') && l.length > 15)?.replace(/^[-*\d.]+\s+/, '').replace(/\*\*/g, '') ??
-      '今天你最真实想推进的一件事是什么？';
+      lines
+        .find((l) => l.includes('？') && l.length > 15)
+        ?.replace(/^[-*\d.]+\s+/, '')
+        .replace(/\*\*/g, '') ?? '今天你最真实想推进的一件事是什么？';
     const mirror: DailyMirrorCard = {
       id: `mirror-${date}-${Date.now()}`,
       date,
@@ -77,6 +86,7 @@ export function parseIncrementalDailyContent(
       articles: [],
       mirrors: [mirror],
       scenarios: [],
+      picks: [],
       summary: `已增量导入 ${date} 真实自我复盘卡`,
     };
   }
@@ -118,7 +128,8 @@ export function parseIncrementalDailyContent(
         articles: [article],
         mirrors: [],
         scenarios: [],
-        summary: `已增量导入「${article.title}」（${words} 词）`,
+        picks: [],
+        summary: `已更新今日专属播客：「${article.title}」（${words} 词）`,
       };
     }
   }
@@ -148,6 +159,16 @@ export function parseIncrementalDailyContent(
     articles: [article],
     mirrors: [],
     scenarios: [],
-    summary: `已增量加入阅读库：「${article.title}」`,
+    picks: [],
+    summary: `已增量加入：「${article.title}」`,
   };
+}
+
+export async function fetchDailyFeedFromUrl(url: string): Promise<DailyImportResult> {
+  const trimmed = url.trim();
+  if (!trimmed) throw new Error('请先在设置中填写日包同步链接');
+  const res = await fetch(trimmed, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`同步失败（HTTP ${res.status}）`);
+  const text = await res.text();
+  return parseIncrementalDailyContent(text, '在线日包');
 }

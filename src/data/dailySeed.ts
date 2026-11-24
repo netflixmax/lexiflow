@@ -1,4 +1,4 @@
-import type { DailyMirrorCard, DailyScenarioCard } from '../types';
+import type { DailyMirrorCard, DailyPick, DailyScenarioCard } from '../types';
 
 export const SEED_DAILY_MIRROR: DailyMirrorCard = {
   id: 'mirror-2026-11-23',
@@ -152,6 +152,30 @@ export const SEED_PERSONAL_ARTICLE = {
     "Right now, my biggest frustration is juggling too many AI agents across different apps. Some have a smooth harness but a weak model; others have a brilliant model wrapped in a clunky interface. What I really want is simple: pair the world's smartest model with a system that truly knows me. Not just a chatbot I talk to, but a quiet mirror that remembers my habits, sharpens my English, and helps me see who I really am.",
   ],
 };
+
+export const SEED_DAILY_PICKS: DailyPick[] = [
+  {
+    id: 'pick-20261123-1',
+    tag: 'AI 工具实践',
+    title: 'Simon Willison：一线 AI 工具与个人工作流笔记',
+    reason: '贴合你对「用 AI 随手造自己的工具」与低摩擦工作流的探索。',
+    url: 'https://simonwillison.net/',
+  },
+  {
+    id: 'pick-20261123-2',
+    tag: 'Harness & 端侧模型',
+    title: 'Hugging Face Blog：Agent Harness 与端侧小模型',
+    reason: '直接呼应你对「一流交互壳 × 顶级模型」及端侧蒸馏的兴趣。',
+    url: 'https://huggingface.co/blog',
+  },
+  {
+    id: 'pick-20261123-3',
+    tag: '哲人思辨',
+    title: 'Aeon Essays：跨学科思想与自我认知长文',
+    reason: '契合你「AI 让学科界限消融、不断认识自己」的长期阅读品味。',
+    url: 'https://aeon.co/essays',
+  },
+];
 
 export interface InterestIsland {
   id: string;

@@ -1,13 +1,16 @@
 import { CURATED_LIBRARY, CURATED_PODCASTS } from '../data/curatedLibrary';
 import {
   SEED_DAILY_MIRROR,
+  SEED_DAILY_PICKS,
   SEED_DAILY_SCENARIOS,
   SEED_PERSONAL_ARTICLE,
 } from '../data/dailySeed';
 import type {
   AiConfig,
   ContentItem,
+  DailyFeedConfig,
   DailyMirrorCard,
+  DailyPick,
   DailyScenarioCard,
   PodcastFeed,
   ReaderSettings,
@@ -26,6 +29,8 @@ const KEYS = {
   READER: 'lexiflow_reader_settings_v1',
   DAILY_MIRRORS: 'lexiflow_daily_mirrors_v1',
   DAILY_SCENARIOS: 'lexiflow_daily_scenarios_v1',
+  DAILY_PICKS: 'lexiflow_daily_picks_v1',
+  DAILY_FEED_CONFIG: 'lexiflow_daily_feed_cfg_v1',
 };
 
 export const DEFAULT_READER_SETTINGS: ReaderSettings = {
@@ -233,6 +238,30 @@ export function loadDailyScenarios(): DailyScenarioCard[] {
 
 export function saveDailyScenarios(scenarios: DailyScenarioCard[]): void {
   localStorage.setItem(KEYS.DAILY_SCENARIOS, JSON.stringify(scenarios));
+}
+
+export function loadDailyPicks(): DailyPick[] {
+  const saved = safeParse<DailyPick[]>(localStorage.getItem(KEYS.DAILY_PICKS), []);
+  if (saved.length === 0) {
+    saveDailyPicks(SEED_DAILY_PICKS);
+    return SEED_DAILY_PICKS;
+  }
+  return saved;
+}
+
+export function saveDailyPicks(picks: DailyPick[]): void {
+  localStorage.setItem(KEYS.DAILY_PICKS, JSON.stringify(picks));
+}
+
+export function loadDailyFeedConfig(): DailyFeedConfig {
+  return {
+    feedUrl: '',
+    ...safeParse<Partial<DailyFeedConfig>>(localStorage.getItem(KEYS.DAILY_FEED_CONFIG), {}),
+  };
+}
+
+export function saveDailyFeedConfig(cfg: DailyFeedConfig): void {
+  localStorage.setItem(KEYS.DAILY_FEED_CONFIG, JSON.stringify(cfg));
 }
 
 export function exportAllDataJson(): string {
