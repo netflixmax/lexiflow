@@ -2,8 +2,8 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import type { PluginListenerHandle } from '@capacitor/core';
 import type { SharedIncomingPayload, VoiceConfig } from '../types';
 
-export const APP_VERSION_NAME = '1.5.0';
-export const APP_VERSION_CODE = 10500;
+export const APP_VERSION_NAME = '1.6.0';
+export const APP_VERSION_CODE = 10600;
 
 // Exact speaker IDs for kokoro-int8-en-v0_19 (11 English neural voices)
 export const KOKORO_SPEAKERS: Array<{ id: number; name: string; desc: string }> = [

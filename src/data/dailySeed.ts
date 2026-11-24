@@ -1,22 +1,113 @@
 import type { DailyMirrorCard, DailyPick, DailyScenarioCard } from '../types';
 
 export const SEED_DAILY_MIRROR: DailyMirrorCard = {
-  id: 'mirror-2026-11-23',
-  date: '2026-11-23',
-  title: '你的第一张真实自我复盘卡',
+  id: 'mirror-2026-11-24-panoramic',
+  date: '2026-11-24',
+  title: '48 小时全景整体复盘卡（380 条语音 × 工作台 × 对话统一）',
   summary:
-    '昨天 179 条输入里，你 70% 的真实能量投入在「搭建个人 AI 基础设施（自研语音键盘 + LexiFlow 英语系统）」。凌晨 02:23 你随口说出“AI 让所有学科变成爱好”，晚上 19:27 你亲自把它写成了英文——真正能记住的英文，永远是你内心真正想说的话。',
+    '把这两天全部数据（6 份语音流水共 380 条 + 共同工作台 7 条沉淀意图 + 你和我们的全部对话）拼成一张完整地图后，能清晰看到你走完了「四级跃迁」：① 造器觉醒（自研私有语音键盘，意识到常用工具皆可自造）；② 大刀减法（亲手砍掉英语 APP 80% 冗余，确立「把习以为常的判断再想一遍」与「山水蒙」不硬推销哲学）；③ 痛醒降噪（厌倦当多 Agent 之间的人肉路由器，2 小时拉通三方会师工作台；并在追小豆免费码 90 分钟后当场刹车悟出「免费的最贵，最先浪费的是注意力」）；④ 架构闭环（把工作台重定义为永久可进化的「真需求传感器」，合并双份云盘总纲，明确未来把实现装进本 APP，并定锚未来一个月死磕语音键盘主线）。',
   highlights: [
-    '真实注意力：英语工具打磨 35% · 多 Agent 总控 35% · 前沿哲思 15% · 现实副业与社交 15%',
-    '高光洞察：拆解出「Model 智商 × Harness 交互壳 × Personal State 个人状态」三层结构',
-    '北极星方向：不断认识自己 → 不断更新自己 → 让线上 AI 瑰宝打通线下真实链接',
+    '注意力全景账本（380 条跨 12+ 应用）：Grok Bot 125 条 · Google 56 条 · 微信 42 条 · Muse 35 条 · 小红书 34 条 · X 17 条——超过 75% 的真实心力都在构建「以我为中心的 AI-Native 系统」',
+    '四大原生思想结晶：① 理想公式「Antigravity × GrokBot」与「Agent = Harness × 模型，人也是一种 Agent」；② 制度洞察「muse 是码求人，小豆是人求码，激励制度决定动力方向」；③ 键盘定位「数据留存本地，随时导出给你的 AI」；④ 架构分工「工作台当传感器沉淀真需求，APP 当实现更新端」',
+    '诚实照见的唯一风险（主线 vs 支线拉扯）：全员刚定下「未来一个月唯一主线磨语音键盘」解决“交不出代表作”的头号痛点，但转头仍会在私聊顺手开 10 秒颜值博主视频或临时支线——把每条新念头先过工作台五步法筛一遍，才能保住指数级复利',
+    '真机与身体双提醒：今日 115 条语音 100% 走了离线本机（0 云端）且设置里缺显眼更新入口；同时你在镜子回声坦承「醒来大脑昏昏的、常熬夜」——睡眠和左手边那杯水，是你这套 Human Agent 最底层的算力',
   ],
   mirrorQuestion:
-    '昨天你花了大量时间折腾工具，但真正听读英文的时间并不长。此刻你最想先享受「亲手进化工具」的乐趣，还是每天花 10 分钟用自己的真话把英语真正说顺？',
+    '过去 48 小时你已经把「传感器（键盘+工作台）→ 记忆底座（Drive）→ 实现端（APP）」的地基彻底打通了。接下来这一个月，为了真正交出「自己的语音输入法」这件代表作，你愿意主动砍掉或暂缓哪一件最容易勾走你注意力的支线？',
   userReflection: '',
 };
 
+export const SEED_DAILY_MIRRORS: DailyMirrorCard[] = [
+  SEED_DAILY_MIRROR,
+  {
+    id: 'mirror-2026-11-23',
+    date: '2026-11-23',
+    title: '你的第一张真实自我复盘卡',
+    summary:
+      '昨天 179 条输入里，你 70% 的真实能量投入在「搭建个人 AI 基础设施（自研语音键盘 + LexiFlow 英语系统）」。凌晨 02:23 你随口说出“AI 让所有学科变成爱好”，晚上 19:27 你亲自把它写成了英文——真正能记住的英文，永远是你内心真正想说的话。',
+    highlights: [
+      '真实注意力：英语工具打磨 35% · 多 Agent 总控 35% · 前沿哲思 15% · 现实副业与社交 15%',
+      '高光洞察：拆解出「Model 智商 × Harness 交互壳 × Personal State 个人状态」三层结构',
+      '北极星方向：不断认识自己 → 不断更新自己 → 让线上 AI 瑰宝打通线下真实链接',
+    ],
+    mirrorQuestion:
+      '昨天你花了大量时间折腾工具，但真正听读英文的时间并不长。此刻你最想先享受「亲手进化工具」的乐趣，还是每天花 10 分钟用自己的真话把英语真正说顺？',
+    userReflection: '',
+  },
+];
+
 export const SEED_DAILY_SCENARIOS: DailyScenarioCard[] = [
+  {
+    id: 'scene-20261124-pan-1',
+    date: '2026-11-24',
+    sceneTag: '传感器 × 实现端架构',
+    zhOriginal: '沉淀需求的那一部分相当于是传感器，实现真需求的都放到 APP 那里更新。',
+    tip: 'act as a sensor（充当传感器）搭配 real needs（真需求），一句说透你今晚定下的核心架构。',
+    enSenseGroups: [
+      'The workbench acts as a sensor',
+      'that captures my real needs,',
+      'while the app is where',
+      'those needs get built and updated.',
+    ],
+    enNatural:
+      'The workbench acts as a sensor that captures my real needs, while the app is where those needs get built and updated.',
+    keyPhrase: 'acts as a sensor',
+    domain: '下达意图',
+    status: 'pending',
+  },
+  {
+    id: 'scene-20261124-pan-2',
+    date: '2026-11-24',
+    sceneTag: '今日复利金句精解',
+    zhOriginal: '随着时间推移呈指数级增长——因为早期的收获本身会进一步生出新的收获。',
+    tip: '拆成三段意群秒懂：grow exponentially over time（随时间指数增长）+ as earlier gains themselves（因为早期积累本身）+ generate further gains（滚出更多新收获）。',
+    enSenseGroups: [
+      'To grow exponentially',
+      'over time,',
+      'as earlier gains themselves',
+      'generate further gains.',
+    ],
+    enNatural: 'To grow exponentially over time as earlier gains themselves generate further gains.',
+    keyPhrase: 'generate further gains',
+    domain: '思想表达',
+    status: 'pending',
+  },
+  {
+    id: 'scene-20261124-pan-3',
+    date: '2026-11-24',
+    sceneTag: '免费最贵的痛醒',
+    zhOriginal: '一旦大家一窝蜂去挤免费的东西，注意力就被浪费了，免费的反而是最贵的。',
+    tip: 'rush toward（蜂拥而上）与 turns out to be the most expensive（结果反而是最贵的）地道有力。',
+    enSenseGroups: [
+      'Once crowds rush toward',
+      'what looks free,',
+      'your attention gets wasted—',
+      'and free turns out to be the most expensive.',
+    ],
+    enNatural:
+      'Once crowds rush toward what looks free, your attention gets wasted—and free turns out to be the most expensive.',
+    keyPhrase: 'turns out to be',
+    domain: '思想表达',
+    status: 'pending',
+  },
+  {
+    id: 'scene-20261124-pan-4',
+    date: '2026-11-24',
+    sceneTag: '人也是一种 Agent',
+    zhOriginal: '智能手机等于硬件乘软件，Agent 等于 Harness 乘模型，从智能角度来看，人也是一种 Agent。',
+    tip: 'times 表示相乘，in a real sense 表示「从真正意义上说」，短促有力、非常适合发推或卡片。',
+    enSenseGroups: [
+      'A smartphone is hardware times software.',
+      'An agent is harness times model.',
+      'In a real sense,',
+      'a human is also an agent.',
+    ],
+    enNatural:
+      'A smartphone is hardware times software. An agent is harness times model. In a real sense, a human is also an agent.',
+    keyPhrase: 'in a real sense',
+    domain: 'AI 洞察',
+    status: 'pending',
+  },
   {
     id: 'scene-20261123-1',
     date: '2026-11-23',
@@ -135,45 +226,68 @@ export const SEED_DAILY_SCENARIOS: DailyScenarioCard[] = [
 ];
 
 export const SEED_PERSONAL_ARTICLE = {
-  id: 'personal-pack-2026-11-23',
-  title: 'My Voice Keyboard & The Fading Walls (2026-11-23 专属微播客)',
-  subtitle: '四级 550 分 i+1 定制 · 源自你昨天的真实思考',
-  author: 'Rong × Antigravity',
+  id: 'personal-pack-2026-11-24-panoramic',
+  title: 'From Scattered Tools to One Living System (全景复盘专属播客)',
+  subtitle: '四级 550 分 i+1 定制 · 融合 380 条语音记录、共同工作台与对话全链路演进',
+  author: 'Rong × Personal Hub',
   source: '个人专属日包',
   category: 'ai' as const,
-  publishedAt: '2026-11-23',
+  publishedAt: '2026-11-24',
   readProgress: 0,
-  wordCount: 162,
+  wordCount: 212,
   isUserImported: true,
-  tags: ['今日专属', 'i+1', 'AI-Native'],
+  tags: ['今日专属', 'i+1', '全景复盘'],
   paragraphs: [
-    "Yesterday, I built my own voice keyboard. It's not a fancy app, but it gave me a crazy feeling: for the first time, my daily thoughts belong to me. I can keep all my data private, and hand it to AI whenever I need a fresh perspective.",
-    'That small win led me to a bigger thought. With AI tools, the walls between subjects are slowly fading. You no longer need to be a computer scientist to build an app, or a linguist to design your own way of learning English. Almost any field can now become a personal hobby.',
-    "Right now, my biggest frustration is juggling too many AI agents across different apps. Some have a smooth harness but a weak model; others have a brilliant model wrapped in a clunky interface. What I really want is simple: pair the world's smartest model with a system that truly knows me. Not just a chatbot I talk to, but a quiet mirror that remembers my habits, sharpens my English, and helps me see who I really am.",
+    'Over the past two days, three hundred and eighty real moments from my phone told one clear story. It started when I built my own voice keyboard so my words could stay local and flow to AI whenever I wanted. Soon after, I cut eighty percent of the clutter out of my English app, leaving only a quiet mirror, a daily podcast, and words I truly mean.',
+    'Then came two honest lessons. First, copying messages between different AI agents turned me into a tired human router—until I brought them onto one shared workbench. Second, after spending more than an hour chasing free invite codes, I stopped and realized a sharp truth: when crowds rush toward what looks free, attention is the first thing we lose. Free often turns out to be the most expensive.',
+    'Tonight, every piece finally clicked into one living system. My voice keyboard and shared workbench act as a sensor—filtering temporary commands into permanent, evolving needs. And this personal app will become the place where real solutions grow and update.',
+    'As the sentence I read tonight says, real progress grows exponentially over time, as earlier gains themselves generate further gains. A human is also an agent—and when I guard my sleep, protect my focus, and polish one real work I use every day, every small gain begins to compound.',
   ],
 };
 
+export const SEED_PERSONAL_ARTICLES = [
+  SEED_PERSONAL_ARTICLE,
+  {
+    id: 'personal-pack-2026-11-23',
+    title: 'My Voice Keyboard & The Fading Walls (2026-11-23 专属微播客)',
+    subtitle: '四级 550 分 i+1 定制 · 源自你昨天的真实思考',
+    author: 'Rong × Antigravity',
+    source: '个人专属日包',
+    category: 'ai' as const,
+    publishedAt: '2026-11-23',
+    readProgress: 0,
+    wordCount: 162,
+    isUserImported: true,
+    tags: ['今日专属', 'i+1', 'AI-Native'],
+    paragraphs: [
+      "Yesterday, I built my own voice keyboard. It's not a fancy app, but it gave me a crazy feeling: for the first time, my daily thoughts belong to me. I can keep all my data private, and hand it to AI whenever I need a fresh perspective.",
+      'That small win led me to a bigger thought. With AI tools, the walls between subjects are slowly fading. You no longer need to be a computer scientist to build an app, or a linguist to design your own way of learning English. Almost any field can now become a personal hobby.',
+      "Right now, my biggest frustration is juggling too many AI agents across different apps. Some have a smooth harness but a weak model; others have a brilliant model wrapped in a clunky interface. What I really want is simple: pair the world's smartest model with a system that truly knows me. Not just a chatbot I talk to, but a quiet mirror that remembers my habits, sharpens my English, and helps me see who I really am.",
+    ],
+  },
+];
+
 export const SEED_DAILY_PICKS: DailyPick[] = [
   {
-    id: 'pick-20261123-1',
-    tag: 'AI 工具实践',
-    title: 'Simon Willison：一线 AI 工具与个人工作流笔记',
-    reason: '贴合你对「用 AI 随手造自己的工具」与低摩擦工作流的探索。',
-    url: 'https://simonwillison.net/',
+    id: 'pick-20261124-pan-1',
+    tag: '今日全景播客',
+    title: '切到「播客」收听：《From Scattered Tools to One Living System》',
+    reason: '用 212 个词把你这两天 380 条记录、工作台会师、「免费最贵」与「传感器×实现端」串成了一篇完整叙事。',
+    url: '',
   },
   {
-    id: 'pick-20261123-2',
-    tag: 'Harness & 端侧模型',
-    title: 'Hugging Face Blog：Agent Harness 与端侧小模型',
-    reason: '直接呼应你对「一流交互壳 × 顶级模型」及端侧蒸馏的兴趣。',
-    url: 'https://huggingface.co/blog',
+    id: 'pick-20261124-pan-2',
+    tag: '主线聚焦行动',
+    title: '明天优先解决语音键盘 2 个真实卡点：为何全走离线本机 + 设置页增加显眼更新按钮',
+    reason: '全部来自你今天 115 条真实语音记录暴露的第一手体感，先打磨每天真用的代表作。',
+    url: '',
   },
   {
-    id: 'pick-20261123-3',
-    tag: '哲人思辨',
-    title: 'Aeon Essays：跨学科思想与自我认知长文',
-    reason: '契合你「AI 让学科界限消融、不断认识自己」的长期阅读品味。',
-    url: 'https://aeon.co/essays',
+    id: 'pick-20261124-pan-3',
+    tag: '一键直连工作台',
+    title: '点右上角「同步」填一次工作台口令，以后每天 1 秒拉取最新复盘与播客',
+    reason: '工作台与本 APP 数据现已完全打通，无需再手动传文件或反复重装。',
+    url: '',
   },
 ];
 

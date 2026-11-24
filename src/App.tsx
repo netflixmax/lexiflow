@@ -153,19 +153,41 @@ export function App() {
       picks?: DailyPick[];
       readme?: LiveReadmeData;
     }) => {
-      if (res.articles.length > 0) handleAddItems(res.articles);
+      if (res.articles.length > 0) {
+        setLibrary((prev) => {
+          const prevMap = new Map(prev.map((a) => [a.id, a]));
+          const incomingIds = new Set(res.articles.map((a) => a.id));
+          const updatedIncoming = res.articles.map((a) => {
+            const old = prevMap.get(a.id);
+            return old ? { ...a, readProgress: old.readProgress } : a;
+          });
+          const merged = [...updatedIncoming, ...prev.filter((a) => !incomingIds.has(a.id))];
+          saveLibrary(merged);
+          return merged;
+        });
+      }
       if (res.mirrors.length > 0) {
         setMirrors((prev) => {
-          const ids = new Set(prev.map((m) => m.id));
-          const merged = [...res.mirrors.filter((m) => !ids.has(m.id)), ...prev];
+          const prevMap = new Map(prev.map((m) => [m.id, m]));
+          const incomingIds = new Set(res.mirrors.map((m) => m.id));
+          const updatedIncoming = res.mirrors.map((m) => {
+            const old = prevMap.get(m.id);
+            return old && old.userReflection ? { ...m, userReflection: old.userReflection } : m;
+          });
+          const merged = [...updatedIncoming, ...prev.filter((m) => !incomingIds.has(m.id))];
           saveDailyMirrors(merged);
           return merged;
         });
       }
       if (res.scenarios.length > 0) {
         setScenarios((prev) => {
-          const ids = new Set(prev.map((s) => s.id));
-          const merged = [...res.scenarios.filter((s) => !ids.has(s.id)), ...prev];
+          const prevMap = new Map(prev.map((s) => [s.id, s]));
+          const incomingIds = new Set(res.scenarios.map((s) => s.id));
+          const updatedIncoming = res.scenarios.map((s) => {
+            const old = prevMap.get(s.id);
+            return old ? { ...s, status: old.status, userAttempt: old.userAttempt ?? s.userAttempt } : s;
+          });
+          const merged = [...updatedIncoming, ...prev.filter((s) => !incomingIds.has(s.id))];
           saveDailyScenarios(merged);
           return merged;
         });
@@ -393,6 +415,7 @@ export function App() {
             onUpdateMirror={handleUpdateMirror}
             onUpdateScenario={handleUpdateScenario}
             onImportDaily={handleImportDaily}
+            onUpdateFeedConfig={handleUpdateFeedConfig}
             onUpdateFeedSynced={(iso) => handleUpdateFeedConfig({ ...feedConfig, lastSyncedAt: iso })}
             onMineWord={handleMineWord}
             onOpenArticle={(item) => setReadingItemId(item.id)}

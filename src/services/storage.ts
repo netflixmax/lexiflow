@@ -1,9 +1,11 @@
 import { CURATED_LIBRARY, CURATED_PODCASTS } from '../data/curatedLibrary';
 import {
   SEED_DAILY_MIRROR,
+  SEED_DAILY_MIRRORS,
   SEED_DAILY_PICKS,
   SEED_DAILY_SCENARIOS,
   SEED_PERSONAL_ARTICLE,
+  SEED_PERSONAL_ARTICLES,
 } from '../data/dailySeed';
 import type {
   AiConfig,
@@ -78,24 +80,24 @@ export const DEFAULT_STATS: UserStats = {
 };
 
 export const DEFAULT_LIVE_README: LiveReadmeData = {
-  updatedAt: '2026-11-24',
-  subtitle: '荣的个性化 AI-Native 伴侣说明书（随每日日包实时更新）',
+  updatedAt: '2026-11-24 23:10',
+  subtitle: '荣的个人 AI-Native 循环说明书（已打通：380 条语音记录 × 共同工作台 × 对话全量统一）',
   sections: [
     {
-      title: '1. 定位：你的个性化 AI-Native 伴侣 APP',
-      body: '它不再是堆满公共教材的传统英语软件，而是围绕「不断认识自己 → 不断更新自己 → 线上打通线下」打造的私人出口。首页拆成「镜子 · 播客 · 真话」三个安静单屏，一屏只做一件事。',
+      title: '1. 全景架构：传感器 × 实现端',
+      body: '• 传感器层（语音输入法 + 共同工作台 + Drive 总纲）：捕捉全天真实输入，过滤临时噪音，把一时的指令沉淀成永久、可进化的「真需求」。\n• 实现与更新层（本个性化 APP）：等真需求在工作台沉淀成熟，具体解决需求的能力都统一放到本 APP 更新交付（英语作为其中一个模块保留）。',
     },
     {
-      title: '2. 核心燃料：把你的真实数据收集得足够',
-      body: '全天照常用手机语音输入法在各个 App 里自然说话，晚上顺手上传到 Google Drive「输入法记录」；看到「镜子」有感触时，直接在回声框留两句真实想法。所有学习时长（精确到秒）、精读字数、镜子回声与复习曲线都会永久留在本机，升级绝不丢失。',
+      title: '2. 应用内一键同步工作台（v1.6 新升级）',
+      body: '在「今日」右上角直接点「同步」，首次输入一次你的工作台空间口令，之后每次只需点一下「同步」，就能 1 秒从共同工作台拉取最新整体复盘、专属播客、真话卡片与本说明书——无需每次重装软件，所有精听秒数、回声与词库 100% 本机留存。',
     },
     {
-      title: '3. 每日热更新：连 README 都会跟着你一起长',
-      body: '每天同步后，系统会在你私有 Drive 的 03_outbox/daily-feed/ 生成当天的 YYYY-MM-DD.json（含最新镜子、1 分钟专属播客、真话卡片、精准推荐与最新一版 README）。点右上角「导入日包」即可 1 秒热更新，无需重装软件。',
+      title: '3. 未来一个月唯一主线：死磕语音输入法',
+      body: '按马斯克五步工作法（先质疑伪需求 → 狠删减 → 简化 → 加速 → 最后自动化）与「先数据、再算法、后算力」原则，未来 1 个月全员主线集中打磨你的语音输入法代表作；其余支线（作家网站、短视频、公众号现金流）统一在工作台透明分级。',
     },
     {
-      title: '4. 声音与隐私红线',
-      body: '播客页顶部可直接点「换声音」，自由试听 11 种 Kokoro 离线男女/美英真人音色或切换 Rime 云端音色。所有私密记录仅保存在你的本机与私有 Drive，绝不写入公开仓库；导入文本时自动过滤邮箱、手机号与高熵密钥。',
+      title: '4. 本次 48 小时全量整体复盘包',
+      body: '融合了 11-23 至 11-24 共 6 份语音记录（380 条）+ 共同工作台 7 条统一意图 + 你与反重力/大猪/Muse 的全部关键对话，并为你定制了全景复盘播客《From Scattered Tools to One Living System》。',
     },
   ],
 };
@@ -118,14 +120,14 @@ export function getTodayKey(): string {
 }
 
 export function loadLibrary(): ContentItem[] {
-  const baseSeed: ContentItem[] = [SEED_PERSONAL_ARTICLE, ...CURATED_LIBRARY];
+  const baseSeed: ContentItem[] = [...SEED_PERSONAL_ARTICLES, ...CURATED_LIBRARY];
   const saved = safeParse<ContentItem[]>(localStorage.getItem(KEYS.LIBRARY), []);
   if (saved.length === 0) {
     saveLibrary(baseSeed);
     return baseSeed;
   }
   const existingIds = new Set(saved.map((i) => i.id));
-  const missingPersonal = existingIds.has(SEED_PERSONAL_ARTICLE.id) ? [] : [SEED_PERSONAL_ARTICLE];
+  const missingPersonal = SEED_PERSONAL_ARTICLES.filter((p) => !existingIds.has(p.id));
   const missingCurated = CURATED_LIBRARY.filter((c) => !existingIds.has(c.id));
   if (missingPersonal.length > 0 || missingCurated.length > 0) {
     const merged = [...missingPersonal, ...saved, ...missingCurated];
@@ -275,8 +277,15 @@ export function saveReaderSettings(settings: ReaderSettings): void {
 export function loadDailyMirrors(): DailyMirrorCard[] {
   const saved = safeParse<DailyMirrorCard[]>(localStorage.getItem(KEYS.DAILY_MIRRORS), []);
   if (saved.length === 0) {
-    saveDailyMirrors([SEED_DAILY_MIRROR]);
-    return [SEED_DAILY_MIRROR];
+    saveDailyMirrors(SEED_DAILY_MIRRORS);
+    return SEED_DAILY_MIRRORS;
+  }
+  const existingIds = new Set(saved.map((m) => m.id));
+  const missing = SEED_DAILY_MIRRORS.filter((m) => !existingIds.has(m.id));
+  if (missing.length > 0) {
+    const merged = [...missing, ...saved];
+    saveDailyMirrors(merged);
+    return merged;
   }
   return saved;
 }
@@ -291,6 +300,13 @@ export function loadDailyScenarios(): DailyScenarioCard[] {
     saveDailyScenarios(SEED_DAILY_SCENARIOS);
     return SEED_DAILY_SCENARIOS;
   }
+  const existingIds = new Set(saved.map((s) => s.id));
+  const missing = SEED_DAILY_SCENARIOS.filter((s) => !existingIds.has(s.id));
+  if (missing.length > 0) {
+    const merged = [...missing, ...saved];
+    saveDailyScenarios(merged);
+    return merged;
+  }
   return saved;
 }
 
@@ -303,6 +319,13 @@ export function loadDailyPicks(): DailyPick[] {
   if (saved.length === 0) {
     saveDailyPicks(SEED_DAILY_PICKS);
     return SEED_DAILY_PICKS;
+  }
+  const existingIds = new Set(saved.map((p) => p.id));
+  const missing = SEED_DAILY_PICKS.filter((p) => !existingIds.has(p.id));
+  if (missing.length > 0) {
+    const merged = [...missing, ...saved];
+    saveDailyPicks(merged);
+    return merged;
   }
   return saved;
 }
@@ -324,7 +347,12 @@ export function saveDailyFeedConfig(cfg: DailyFeedConfig): void {
 
 export function loadLiveReadme(): LiveReadmeData {
   const saved = safeParse<LiveReadmeData | null>(localStorage.getItem(KEYS.LIVE_README), null);
-  if (!saved || !Array.isArray(saved.sections) || saved.sections.length === 0) {
+  if (
+    !saved ||
+    !Array.isArray(saved.sections) ||
+    saved.sections.length === 0 ||
+    saved.updatedAt < DEFAULT_LIVE_README.updatedAt
+  ) {
     saveLiveReadme(DEFAULT_LIVE_README);
     return DEFAULT_LIVE_README;
   }

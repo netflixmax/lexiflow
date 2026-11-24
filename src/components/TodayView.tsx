@@ -69,6 +69,7 @@ interface TodayViewProps {
     picks?: DailyPick[];
     readme?: LiveReadmeData;
   }) => void;
+  onUpdateFeedConfig: (cfg: DailyFeedConfig) => void;
   onUpdateFeedSynced: (iso: string) => void;
   onMineWord: (card: Omit<VocabCard, 'id' | 'createdAt' | 'fsrs'>) => void;
   onOpenArticle: (item: ContentItem) => void;
@@ -90,6 +91,7 @@ export const TodayView: React.FC<TodayViewProps> = ({
   onUpdateMirror,
   onUpdateScenario,
   onImportDaily,
+  onUpdateFeedConfig,
   onUpdateFeedSynced,
   onMineWord,
   onOpenArticle,
@@ -150,6 +152,8 @@ export const TodayView: React.FC<TodayViewProps> = ({
   // Import / Sync state
   const [importNotice, setImportNotice] = useState<string | null>(null);
   const [syncingFeed, setSyncingFeed] = useState(false);
+  const [showHubSheet, setShowHubSheet] = useState(false);
+  const [hubPasscodeInput, setHubPasscodeInput] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const activeScene = scenarios[sceneIdx] ?? scenarios[0] ?? null;
@@ -335,14 +339,30 @@ export const TodayView: React.FC<TodayViewProps> = ({
     }
   };
 
+  const trySyncWithFallback = async (primaryUrl: string) => {
+    try {
+      return { parsed: await fetchDailyFeedFromUrl(primaryUrl), usedUrl: primaryUrl };
+    } catch (firstErr) {
+      if (primaryUrl.includes('zaixiang-hub.pages.dev')) {
+        const alt = primaryUrl.replace('zaixiang-hub.pages.dev', 'rong-personal-hub.lucas2001loveu.workers.dev');
+        return { parsed: await fetchDailyFeedFromUrl(alt), usedUrl: alt };
+      }
+      if (primaryUrl.includes('rong-personal-hub.lucas2001loveu.workers.dev')) {
+        const alt = primaryUrl.replace('rong-personal-hub.lucas2001loveu.workers.dev', 'zaixiang-hub.pages.dev');
+        return { parsed: await fetchDailyFeedFromUrl(alt), usedUrl: alt };
+      }
+      throw firstErr;
+    }
+  };
+
   const handleSyncRemoteFeed = async () => {
     if (!feedConfig.feedUrl.trim()) {
-      fileInputRef.current?.click();
+      setShowHubSheet(true);
       return;
     }
     setSyncingFeed(true);
     try {
-      const parsed = await fetchDailyFeedFromUrl(feedConfig.feedUrl);
+      const { parsed, usedUrl } = await trySyncWithFallback(feedConfig.feedUrl.trim());
       onImportDaily({
         articles: parsed.articles,
         mirrors: parsed.mirrors,
@@ -350,10 +370,44 @@ export const TodayView: React.FC<TodayViewProps> = ({
         picks: parsed.picks,
         readme: parsed.readme,
       });
-      onUpdateFeedSynced(new Date().toISOString());
+      const nowIso = new Date().toISOString();
+      onUpdateFeedSynced(nowIso);
+      onUpdateFeedConfig({ feedUrl: usedUrl, lastSyncedAt: nowIso });
       showToast(parsed.summary);
     } catch (e) {
-      showToast((e as Error).message || '拉取失败，可点导入日包');
+      showToast((e as Error).message || '拉取失败，可点日包手动导入');
+    } finally {
+      setSyncingFeed(false);
+    }
+  };
+
+  const handleConnectHubAndSync = async () => {
+    const k = hubPasscodeInput.trim();
+    if (!k) {
+      showToast('请输入工作台口令');
+      return;
+    }
+    const candidateUrl = k.startsWith('http')
+      ? k
+      : `https://zaixiang-hub.pages.dev/api/daily-feed.json?key=${encodeURIComponent(k)}`;
+    setSyncingFeed(true);
+    try {
+      const { parsed, usedUrl } = await trySyncWithFallback(candidateUrl);
+      onImportDaily({
+        articles: parsed.articles,
+        mirrors: parsed.mirrors,
+        scenarios: parsed.scenarios,
+        picks: parsed.picks,
+        readme: parsed.readme,
+      });
+      const nowIso = new Date().toISOString();
+      onUpdateFeedSynced(nowIso);
+      onUpdateFeedConfig({ feedUrl: usedUrl, lastSyncedAt: nowIso });
+      setShowHubSheet(false);
+      setHubPasscodeInput('');
+      showToast('已连上共同工作台并同步最新复盘与播客');
+    } catch (e) {
+      showToast((e as Error).message || '口令或网络有误，请重试');
     } finally {
       setSyncingFeed(false);
     }
@@ -396,20 +450,18 @@ export const TodayView: React.FC<TodayViewProps> = ({
               README
             </button>
 
-            {feedConfig.feedUrl.trim() ? (
-              <button
-                onClick={handleSyncRemoteFeed}
-                disabled={syncingFeed}
-                className="h-8 px-2.5 rounded-xl bg-[#1C1B18] text-[#FAF9F6] text-[12px] font-medium flex items-center gap-1 disabled:opacity-50"
-              >
-                {syncingFeed ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-3.5 h-3.5" />
-                )}
-                同步
-              </button>
-            ) : null}
+            <button
+              onClick={handleSyncRemoteFeed}
+              disabled={syncingFeed}
+              className="h-8 px-2.5 rounded-xl bg-[#1C1B18] text-[#FAF9F6] text-[12px] font-medium flex items-center gap-1 disabled:opacity-50"
+            >
+              {syncingFeed ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3.5 h-3.5" />
+              )}
+              同步
+            </button>
 
             <button
               onClick={() => fileInputRef.current?.click()}
@@ -955,6 +1007,44 @@ export const TodayView: React.FC<TodayViewProps> = ({
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {showHubSheet && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] flex items-end justify-center"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowHubSheet(false);
+          }}
+        >
+          <div className="w-full max-w-lg bg-[#FAF9F6] rounded-t-3xl p-5 pb-8 space-y-3.5 border-t border-[#ECEAE4]">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[16px] font-semibold text-[#1C1B18]">直连共同工作台（只需填一次）</h3>
+              <button
+                onClick={() => setShowHubSheet(false)}
+                className="w-8 h-8 rounded-full bg-white border border-[#E5E2DA] flex items-center justify-center text-[#57544D]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-[12.5px] text-[#78756E] leading-relaxed">
+              输入一次你的工作台私人空间口令，之后每次点右上角「同步」即可 1 秒更新最新整体复盘、专属播客与真话卡片，无需再下载重装。
+            </p>
+            <input
+              type="password"
+              value={hubPasscodeInput}
+              onChange={(e) => setHubPasscodeInput(e.target.value)}
+              placeholder="输入工作台私人空间口令…"
+              className="w-full h-11 px-3.5 rounded-xl bg-white border border-[#E5E2DA] text-[14px]"
+            />
+            <button
+              onClick={handleConnectHubAndSync}
+              disabled={syncingFeed}
+              className="w-full h-11 rounded-xl bg-[#1C1B18] text-white text-[13.5px] font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {syncingFeed && <Loader2 className="w-4 h-4 animate-spin" />}
+              连接并立即同步
+            </button>
           </div>
         </div>
       )}
